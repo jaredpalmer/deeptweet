@@ -62,13 +62,13 @@ async function searchGoogle(query) {
   return data.organic || [];
 }
 
-async function fetchAndExtractContent(url) {
+async function fetchAndExtractContent(url, task) {
   try {
-    console.log(`📥 Fetching and parsing: ${url}`);
+    task.output = `📥 Processing: ${url}`;
     const content = await parseWeb(url);
     return content.slice(0, 4000); // Limit content length
   } catch (error) {
-    console.error(`Error fetching ${url}:`, error.message);
+    task.output = `⚠️ Error: ${error.message}`;
     return '';
   }
 }
@@ -108,19 +108,21 @@ async function researchTopic(topic) {
     },
     {
       title: '📑 Analyzing URLs',
-      task: async () => {
-        contents = await queue.addAll(
-          urls.map(url => async () => {
-            const content = await fetchAndExtractContent(url);
+      task: () => new Listr(
+        urls.map(url => ({
+          title: `Analyzing ${url}`,
+          task: async (ctx, task) => {
+            const content = await fetchAndExtractContent(url, task);
             if (content) {
+              task.output = '✍️ Generating summary...';
               const summary = await summarizeContent(content);
               return `Source: ${url}\n\n${summary}`;
             }
             return '';
-          })
-        );
-        research = contents.filter(Boolean).join('\n\n---\n\n');
-      }
+          }
+        })),
+        { concurrent: 2 }
+      )
     },
     {
       title: '📱 Generating Tweet Thread',
@@ -130,16 +132,24 @@ async function researchTopic(topic) {
     }
   ]);
 
-  await tasks.run();
+  const context = await tasks.run();
 
-  console.log('\n📊 Research Results:');
-  console.log('------------------------');
-  console.log(research);
-  
-  console.log('\n🧵 Tweet Thread:');
-  console.log('------------------------');
-  console.log(tweetThread);
-  
+  // Create a clean output display
+  const output = new Listr([
+    {
+      title: '📊 Research Results',
+      task: (ctx, task) => {
+        task.output = research;
+      }
+    },
+    {
+      title: '🧵 Tweet Thread',
+      task: (ctx, task) => {
+        task.output = tweetThread;
+      }
+    }
+  ], { renderer: 'verbose' }).run();
+
   return { research, tweetThread };
 }
 
