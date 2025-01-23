@@ -4,6 +4,7 @@ import PQueue from 'p-queue';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import 'dotenv/config';
+import Listr from 'listr';
 
 const queue = new PQueue({ concurrency: 2 });
 
@@ -91,43 +92,49 @@ async function generateTweetThread(research) {
 }
 
 async function researchTopic(topic) {
-  console.log(`🔍 Starting research on topic: ${topic}`);
-  
-  // Search Google using Serper API
-  console.log(`🌐 Searching for: ${topic}`);
-  const searchResults = await searchGoogle(topic);
-  // Get unique URLs
-  const urls = [...new Set(
-    searchResults
-      .map(result => result.link)
-      .filter(url => url && url.startsWith('http'))
-  )];
+  let searchResults, urls, contents, research, tweetThread;
 
-  console.log(`📑 Found ${urls.length} unique URLs to analyze`);
-
-  // Fetch and extract content from each URL using queue
-  const contents = await queue.addAll(
-    urls.map(url => async () => {
-      const content = await fetchAndExtractContent(url);
-      if (content) {
-        console.log(`    📝 Summarizing content from: ${url}`);
-        const summary = await summarizeContent(content);
-        return `Source: ${url}\n\n${summary}`;
+  const tasks = new Listr([
+    {
+      title: '🔍 Searching Google',
+      task: async () => {
+        searchResults = await searchGoogle(topic);
+        urls = [...new Set(
+          searchResults
+            .map(result => result.link)
+            .filter(url => url && url.startsWith('http'))
+        )];
       }
-      return '';
-    })
-  );
+    },
+    {
+      title: '📑 Analyzing URLs',
+      task: async () => {
+        contents = await queue.addAll(
+          urls.map(url => async () => {
+            const content = await fetchAndExtractContent(url);
+            if (content) {
+              const summary = await summarizeContent(content);
+              return `Source: ${url}\n\n${summary}`;
+            }
+            return '';
+          })
+        );
+        research = contents.filter(Boolean).join('\n\n---\n\n');
+      }
+    },
+    {
+      title: '📱 Generating Tweet Thread',
+      task: async () => {
+        tweetThread = await generateTweetThread(research);
+      }
+    }
+  ]);
 
-  // Filter out empty results and combine
-  const research = contents.filter(Boolean).join('\n\n---\n\n');
-  
+  await tasks.run();
+
   console.log('\n📊 Research Results:');
   console.log('------------------------');
   console.log(research);
-
-  // Generate tweet thread
-  console.log('\n📱 Generating Tweet Thread...');
-  const tweetThread = await generateTweetThread(research);
   
   console.log('\n🧵 Tweet Thread:');
   console.log('------------------------');
