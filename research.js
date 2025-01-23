@@ -104,14 +104,18 @@ async function researchTopic(topic) {
 
   const tasks = new Listr([
     {
+      title: 'Researching AI Trends',
+      task: () => new Listr([
+    {
       title: '🔍 Searching Google',
-      task: async () => {
+      task: async (ctx) => {
         searchResults = await searchGoogle(topic);
         urls = [...new Set(
           searchResults
             .map(result => result.link)
             .filter(url => url && url.startsWith('http'))
         )];
+        ctx.urls = urls;
       }
     },
     {
@@ -146,7 +150,7 @@ async function researchTopic(topic) {
         tweetThread = await generateTweetThread(research);
       }
     }
-  ]);
+  ])}, { collapse: false });
 
   const context = await tasks.run();
 
