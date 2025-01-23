@@ -120,6 +120,24 @@ async function generateTweetThread(research) {
   return text;
 }
 
+async function prioritizeInsight(insight) {
+  const { text } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: "system",
+        content: "You are a research assistant. Rate the following insight from 1-10 based on: novelty, factual content, and potential interest to readers. Return only the number."
+      },
+      {
+        role: "user",
+        content: insight
+      }
+    ]
+  });
+  const score = parseInt(text.trim(), 10) || 5;
+  return score;
+}
+
 async function researchTopic(topic, isSubTopic = false) {
   if (discoveredTopics.has(topic) || discoveredTopics.size >= MAX_TOPICS) {
     return;
