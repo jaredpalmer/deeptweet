@@ -116,21 +116,28 @@ async function researchTopic(topic) {
     },
     {
       title: '📑 Analyzing URLs',
-      task: () => new Listr(
-        urls.map(url => ({
-          title: `Analyzing ${url}`,
-          task: async (ctx, task) => {
-            const content = await fetchAndExtractContent(url, task);
-            if (content) {
-              task.output = '✍️ Generating summary...';
-              const summary = await summarizeContent(content);
-              if (!ctx.summaries) ctx.summaries = [];
-              ctx.summaries.push(`Source: ${url}\n\n${summary}`);
-            }
+      task: () => {
+        return new Listr([
+          {
+            title: 'Processing URLs',
+            task: () => new Listr(
+              urls.map(url => ({
+                title: `${url.slice(0, 50)}...`,
+                task: async (ctx, task) => {
+                  const content = await fetchAndExtractContent(url, task);
+                  if (content) {
+                    task.output = '✍️ Generating summary...';
+                    const summary = await summarizeContent(content);
+                    if (!ctx.summaries) ctx.summaries = [];
+                    ctx.summaries.push(`Source: ${url}\n\n${summary}`);
+                  }
+                }
+              })),
+              { concurrent: 2, exitOnError: false }
+            )
           }
-        })),
-        { concurrent: 2 }
-      )
+        ]);
+      }
     },
     {
       title: '📱 Generating Tweet Thread',
@@ -143,21 +150,11 @@ async function researchTopic(topic) {
 
   const context = await tasks.run();
 
-  // Create a clean output display
-  const output = new Listr([
-    {
-      title: '📊 Research Results',
-      task: (ctx, task) => {
-        task.output = research;
-      }
-    },
-    {
-      title: '🧵 Tweet Thread',
-      task: (ctx, task) => {
-        task.output = tweetThread;
-      }
-    }
-  ], { renderer: 'verbose' }).run();
+  // Display final results
+  console.log('\n📊 Research Results:\n');
+  console.log(research);
+  console.log('\n🧵 Tweet Thread:\n');
+  console.log(tweetThread);
 
   return { research, tweetThread };
 }
