@@ -2,6 +2,10 @@
   "name": "deeptweet",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "research": "node research.js",
+    "pretty": "node pretty-research.js"
+  },
   "dependencies": {
     "@ai-sdk/openai": "^1.1.2",
     "ai": "^4.1.2",
