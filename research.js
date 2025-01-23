@@ -72,13 +72,48 @@ async function fetchAndExtractContent(url) {
   }
 }
 
+async function discoverNewTopics(content, originalTopic) {
+  const { text } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: "system",
+        content: "You are a research assistant. Analyze the content and identify 2-3 related subtopics that would be valuable to research further. Return only the topics, one per line. Topics should be specific and focused."
+      },
+      {
+        role: "user",
+        content: `Original topic: ${originalTopic}\n\nContent to analyze:\n${content}`
+      }
+    ]
+  });
+  return text.split('\n').filter(Boolean);
+}
+
 async function summarizeContent(content) {
   const { text } = await generateText({
     model: openai('gpt-4o'),
     prompt: content,
-    system: "You are a research assistant. Summarize the provided content into 2-3 key insights. Focus on factual information and interesting findings."
+    system: "You are a research assistant. Summarize the provided content into 2-3 key insights. Focus on factual information and interesting findings. Include any numerical data or statistics if present."
   });
   return text;
+}
+
+async function prioritizeInsight(insight) {
+  const { text } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: "system",
+        content: "You are a research assistant. Rate the following insight from 1-10 based on: novelty, factual content, and potential interest to readers. Return only the number."
+      },
+      {
+        role: "user",
+        content: insight
+      }
+    ]
+  });
+  const score = parseInt(text.trim(), 10) || 5;
+  return score;
 }
 
 async function generateTweetThread(research) {
