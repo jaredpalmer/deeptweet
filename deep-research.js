@@ -280,7 +280,7 @@ async function researchTopic(topic, isSubTopic = false) {
   for (const url of urls) {
     logger.info(`📄 Processing: ${url.slice(0, 50)}...`);
     
-    const content = await fetchAndExtractContent(url, urlSpinner);
+    const content = await fetchAndExtractContent(url);
     if (content) {
       logger.info('✍️ Generating summary...');
       const summary = await summarizeContent(content);
@@ -296,7 +296,7 @@ async function researchTopic(topic, isSubTopic = false) {
         logger.info('🔍 Discovering related topics...');
         const newTopics = await discoverNewTopics(content, topic);
         logger.success(`🔍 Found ${newTopics.length} related topics`);
-        console.log(newTopics.map(t => kleur.dim(`   └─ ${t}`)).join('\n'));
+        newTopics.forEach(t => logger.log(kleur.dim(`└─ ${t}`)));
         
         for (const newTopic of newTopics) {
           await new Promise(resolve => setTimeout(resolve, 500));
