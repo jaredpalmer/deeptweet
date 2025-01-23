@@ -85,8 +85,16 @@ async function summarizeContent(content) {
 async function generateTweetThread(research) {
   const { text } = await generateText({
     model: openai('gpt-4o'),
-    prompt: research,
-    system: "You are a Twitter Thread Creator. Create a compelling thread from the research provided. Each tweet must be under 280 characters. Create 5-7 tweets that tell an engaging story about the topic. Format each tweet on a new line starting with a number and period (e.g. '1. First tweet')."
+    messages: [
+      {
+        role: "system",
+        content: "You are a Twitter Thread Creator. Create a compelling thread from the research provided. Each tweet must be under 280 characters. Create 5-7 tweets that tell an engaging story about the topic. Format each tweet on a new line starting with a number and period (e.g. '1. First tweet')."
+      },
+      {
+        role: "user",
+        content: research
+      }
+    ]
   });
   return text;
 }
@@ -116,9 +124,9 @@ async function researchTopic(topic) {
             if (content) {
               task.output = '✍️ Generating summary...';
               const summary = await summarizeContent(content);
-              return `Source: ${url}\n\n${summary}`;
+              if (!ctx.summaries) ctx.summaries = [];
+              ctx.summaries.push(`Source: ${url}\n\n${summary}`);
             }
-            return '';
           }
         })),
         { concurrent: 2 }
@@ -126,7 +134,8 @@ async function researchTopic(topic) {
     },
     {
       title: '📱 Generating Tweet Thread',
-      task: async () => {
+      task: async (ctx) => {
+        const research = ctx.summaries.join('\n\n---\n\n');
         tweetThread = await generateTweetThread(research);
       }
     }
