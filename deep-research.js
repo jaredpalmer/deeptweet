@@ -3,7 +3,6 @@ import { openai } from '@ai-sdk/openai';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import 'dotenv/config';
-import ora from 'ora';
 import kleur from 'kleur';
 import PQueue from 'p-queue';
 import Table from 'cli-table3';
@@ -13,7 +12,6 @@ import readline from 'readline';
 class Logger {
   constructor() {
     this.indent = 0;
-    this.spinners = new Map();
   }
 
   getPrefix() {
@@ -24,6 +22,18 @@ class Logger {
     console.log(this.getPrefix() + message);
   }
 
+  success(message) {
+    this.log(kleur.green('✓ ' + message));
+  }
+
+  error(message) {
+    this.log(kleur.red('✗ ' + message));
+  }
+
+  info(message) {
+    this.log(kleur.blue('ℹ ' + message));
+  }
+
   increaseIndent() {
     this.indent++;
     return () => this.decreaseIndent();
@@ -32,59 +42,9 @@ class Logger {
   decreaseIndent() {
     this.indent = Math.max(0, this.indent - 1);
   }
-
-  createSpinner(text, id) {
-    const spinner = ora({
-      text: this.getPrefix() + text,
-      color: 'cyan',
-      spinner: {
-        frames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-        interval: 80
-      }
-    }).start();
-    
-    if (id) {
-      this.spinners.set(id, spinner);
-    }
-    
-    return spinner;
-  }
-
-  updateSpinner(id, text) {
-    const spinner = this.spinners.get(id);
-    if (spinner) {
-      spinner.text = this.getPrefix() + text;
-    }
-  }
-
-  succeedSpinner(id, text) {
-    const spinner = this.spinners.get(id);
-    if (spinner) {
-      spinner.succeed(this.getPrefix() + text);
-      this.spinners.delete(id);
-    }
-  }
-
-  failSpinner(id, text) {
-    const spinner = this.spinners.get(id);
-    if (spinner) {
-      spinner.fail(this.getPrefix() + text);
-      this.spinners.delete(id);
-    }
-  }
 }
 
 const logger = new Logger();
-
-function createSpinner(text) {
-  return ora({
-    text,
-    spinner: {
-      frames,
-      interval: 80
-    }
-  }).start();
-}
 
 function printBanner(topic) {
   console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
@@ -224,13 +184,13 @@ async function searchGoogle(query) {
   return data.organic || [];
 }
 
-async function fetchAndExtractContent(url, spinner) {
+async function fetchAndExtractContent(url) {
   try {
-    spinner.text = kleur.blue(`📥 Processing: ${url}`);
+    logger.info(`📥 Processing: ${url}`);
     const content = await parseWeb(url);
     return content.slice(0, 4000); // Limit content length
   } catch (error) {
-    spinner.text = kleur.red(`⚠️ Error: ${error.message}`);
+    logger.error(`⚠️ Error: ${error.message}`);
     return '';
   }
 }
@@ -281,7 +241,6 @@ async function prioritizeInsight(insight) {
 
 async function researchTopic(topic, isSubTopic = false) {
   const startTime = Date.now();
-  const topicId = `topic-${topic.replace(/\s+/g, '-')}`;
   
   if (!isSubTopic) {
     printBanner(topic);
@@ -296,10 +255,10 @@ async function researchTopic(topic, isSubTopic = false) {
   const summaries = [];
   
   const release = logger.increaseIndent();
-  const topicSpinner = logger.createSpinner(kleur.bold().cyan(`🔬 Researching: ${topic}`), topicId);
+  logger.info(`🔬 Researching: ${topic}`);
   logger.log(''); // Add spacing
   
-  const searchSpinner = logger.createSpinner(kleur.blue('🔍 Searching Google...'));
+  logger.info('🔍 Searching Google...');
   try {
     searchResults = await searchGoogle(topic);
     urls = [...new Set(
