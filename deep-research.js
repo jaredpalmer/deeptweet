@@ -46,45 +46,59 @@ function clearScreen() {
 function render() {
   clearScreen();
   
-  // Print banner
-  console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
-  console.log(kleur.bold().cyan('│      DeepTweet Research Tool      │'));
-  console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
+  // Print compact header
+  console.log(kleur.bold().cyan('╭── DeepTweet Research ──╮'));
+  
+  // Show stats
+  const stats = [
+    `Topics: ${state.topics.size}`,
+    `Tasks: ${state.currentTasks.size}`,
+    `Events: ${state.events.length}`
+  ].join(' │ ');
+  console.log(kleur.dim(`${stats}\n`));
 
-  // Print current tasks
+  // Print active tasks (max 3)
   if (state.currentTasks.size > 0) {
-    console.log(kleur.bold().yellow('🔄 Current Tasks:'));
-    state.currentTasks.forEach((task, id) => {
-      console.log(kleur.dim(`└─ ${task}`));
+    const tasks = Array.from(state.currentTasks.values()).slice(-3);
+    console.log(kleur.yellow('⚡ Active:'));
+    tasks.forEach(task => {
+      console.log(kleur.dim(`› ${task}`));
     });
     console.log();
   }
 
-  // Print recent events (last 10)
-  console.log(kleur.bold().yellow('📋 Recent Activity:'));
-  state.events.slice(-10).forEach(event => {
-    const prefix = {
-      [EventType.INFO]: kleur.blue('ℹ'),
-      [EventType.SUCCESS]: kleur.green('✓'),
-      [EventType.ERROR]: kleur.red('✗'),
-      [EventType.TASK_START]: kleur.yellow('→'),
-      [EventType.TASK_END]: kleur.green('←'),
-      [EventType.INSIGHT_ADDED]: kleur.magenta('💡'),
-      [EventType.TOPIC_ADDED]: kleur.cyan('🔍')
-    }[event.type];
+  // Print recent events (last 6)
+  console.log(kleur.yellow('📝 Recent:'));
+  state.events.slice(-6).forEach(event => {
+    const icons = {
+      [EventType.INFO]: '→',
+      [EventType.SUCCESS]: '✓',
+      [EventType.ERROR]: '✗',
+      [EventType.TASK_START]: '▶',
+      [EventType.TASK_END]: '■',
+      [EventType.INSIGHT_ADDED]: '✧',
+      [EventType.TOPIC_ADDED]: '+'
+    };
     
-    console.log(`${prefix} ${event.message}`);
+    const colors = {
+      [EventType.INFO]: kleur.blue,
+      [EventType.SUCCESS]: kleur.green,
+      [EventType.ERROR]: kleur.red,
+      [EventType.TASK_START]: kleur.yellow,
+      [EventType.TASK_END]: kleur.green,
+      [EventType.INSIGHT_ADDED]: kleur.magenta,
+      [EventType.TOPIC_ADDED]: kleur.cyan
+    };
+    
+    const icon = icons[event.type];
+    const colorFn = colors[event.type];
+    console.log(colorFn(`${icon} ${event.message}`));
   });
 
-  // Print completion status if done
+  // Print completion status
   if (state.isComplete) {
     const duration = ((Date.now() - state.startTime) / 1000).toFixed(1);
-    console.log(kleur.dim(`\n⏱️  Research completed in ${duration}s`));
-    
-    if (state.tweetThread) {
-      console.log('\n' + kleur.bold().cyan('🧵 Generated Tweet Thread:'));
-      console.log(kleur.blue(state.tweetThread));
-    }
+    console.log(kleur.dim(`\n⏱️  Done in ${duration}s`));
   }
 }
 
@@ -152,26 +166,26 @@ function logError(message, details = '') {
 }
 
 function displayInsightsTable(insights) {
-  const table = new Table({
-    head: [
-      kleur.cyan('Topic'),
-      kleur.cyan('Score'),
-      kleur.cyan('Summary')
-    ],
-    wordWrap: true,
-    wrapOnWordBoundary: true,
-    colWidths: [20, 8, 50]
+  // Group insights by topic
+  const byTopic = insights.reduce((acc, insight) => {
+    if (!acc[insight.topic]) acc[insight.topic] = [];
+    acc[insight.topic].push(insight);
+    return acc;
+  }, {});
+
+  Object.entries(byTopic).forEach(([topic, topicInsights]) => {
+    console.log(kleur.bold().cyan(`\n${topic}`));
+    
+    // Sort by score and take top 3
+    topicInsights
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .forEach(({ score, summary }) => {
+        const scoreStr = '★'.repeat(Math.round(score/2));
+        console.log(kleur.yellow(scoreStr) + kleur.dim('☆'.repeat(5-Math.round(score/2))));
+        console.log(kleur.dim(summary.slice(0, 120) + '...\n'));
+      });
   });
-  
-  insights.forEach(({ topic, score, summary }) => {
-    table.push([
-      topic,
-      score,
-      summary.slice(0, 200) + '...'
-    ]);
-  });
-  
-  console.log('\n' + table.toString());
 }
 
 function setupKeyboardControls() {
@@ -426,18 +440,21 @@ async function researchTopic(topic, isSubTopic = false) {
   if (!isSubTopic) {
     logger.success(`✨ Completed research: ${topic}`);
     
-    console.log('\n' + kleur.bold().cyan('📊 Research Coverage:'));
-    console.log(kleur.blue(`📌 Main topic: ${topic}`));
-    console.log(kleur.blue(`🔍 Related topics: ${Array.from(discoveredTopics).slice(1).join(', ') || 'none'}`));
-    console.log(kleur.blue(`📚 Total insights: ${researchInsights.length}`));
+    console.log(kleur.bold().cyan('\n📊 Summary'));
+    console.log(kleur.dim('─'.repeat(40)));
+    console.log(kleur.blue(`› Topic: ${topic}`));
+    const relatedTopics = Array.from(discoveredTopics).slice(1);
+    if (relatedTopics.length) {
+      console.log(kleur.blue(`› Related: ${relatedTopics.slice(0,3).join(', ')}${relatedTopics.length > 3 ? '...' : ''}`));
+    }
+    console.log(kleur.blue(`› Insights: ${researchInsights.length}`));
+    console.log(kleur.dim('─'.repeat(40)));
     
     displayInsightsTable(researchInsights);
     
-    console.log('\n' + kleur.bold().cyan('🧵 Generated Tweet Thread:'));
+    console.log(kleur.bold().cyan('\n🧵 Tweet Thread'));
+    console.log(kleur.dim('─'.repeat(40)));
     console.log(kleur.blue(tweetThread));
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(kleur.dim(`\n⏱️  Research completed in ${duration}s`));
 
     return { tweetThread, insights: researchInsights };
   }
