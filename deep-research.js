@@ -3,7 +3,8 @@ import { openai } from '@ai-sdk/openai';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import 'dotenv/config';
-import Listr from 'listr';
+import ora from 'ora';
+import kleur from 'kleur';
 import PQueue from 'p-queue';
 
 // Topic discovery and research state
@@ -87,13 +88,13 @@ async function searchGoogle(query) {
   return data.organic || [];
 }
 
-async function fetchAndExtractContent(url, task) {
+async function fetchAndExtractContent(url, spinner) {
   try {
-    task.output = `📥 Processing: ${url}`;
+    spinner.text = kleur.blue(`📥 Processing: ${url}`);
     const content = await parseWeb(url);
     return content.slice(0, 4000); // Limit content length
   } catch (error) {
-    task.output = `⚠️ Error: ${error.message}`;
+    spinner.text = kleur.red(`⚠️ Error: ${error.message}`);
     return '';
   }
 }
@@ -149,91 +150,74 @@ async function researchTopic(topic, isSubTopic = false) {
   discoveredTopics.add(topic);
 
   let searchResults, urls, tweetThread;
+  const summaries = [];
+  
+  console.log(kleur.bold().cyan(`\n🔬 Researching: ${topic}`));
+  
+  const searchSpinner = ora('Searching Google...').start();
+  try {
+    searchResults = await searchGoogle(topic);
+    urls = [...new Set(
+      searchResults
+        .map(result => result.link)
+        .filter(url => url && url.startsWith('http'))
+    )].slice(0, 4);
+    searchSpinner.succeed(kleur.green('Search completed'));
+  } catch (error) {
+    searchSpinner.fail(kleur.red(`Search failed: ${error.message}`));
+    return;
+  }
 
-  const tasks = new Listr([
-    {
-      title: `Researching: ${topic}`,
-      task: () => new Listr([
-        {
-          title: '🔍 Searching Google',
-          task: async (ctx) => {
-            searchResults = await searchGoogle(topic);
-            urls = [...new Set(
-              searchResults
-                .map(result => result.link)
-                .filter(url => url && url.startsWith('http'))
-            )].slice(0, 4); // Limit to top 4 URLs for cleaner output
-            ctx.urls = urls;
-          }
-        },
-        {
-          title: '📑 Analyzing Content',
-          task: () => new Listr(
-            urls.map(url => ({
-              title: `${url.slice(0, 40)}...`,
-              task: async (ctx, task) => {
-                const content = await fetchAndExtractContent(url, task);
-                if (content) {
-                  task.output = '✍️ Generating summary...';
-                  const summary = await summarizeContent(content);
-                  if (!ctx.summaries) ctx.summaries = [];
-                  ctx.summaries.push({ url, summary });
+  const contentSpinner = ora('Analyzing content...').start();
+  for (const url of urls) {
+    contentSpinner.text = kleur.blue(`Analyzing: ${url.slice(0, 40)}...`);
+    
+    const content = await fetchAndExtractContent(url, contentSpinner);
+    if (content) {
+      contentSpinner.text = kleur.blue('Generating summary...');
+      const summary = await summarizeContent(content);
+      summaries.push({ url, summary });
 
-                  if (!isSubTopic) {
-                    // Discover new topics
-                    const newTopics = await discoverNewTopics(content, topic);
-                    task.output = `🔍 Found ${newTopics.length} related topics`;
-                    
-                    // Queue new topics with a delay for clearer output
-                    for (const newTopic of newTopics) {
-                      await new Promise(resolve => setTimeout(resolve, 500));
-                      researchQueue.add(() => researchTopic(newTopic, true));
-                    }
-                  }
-
-                  // Score and store insight
-                  const score = await prioritizeInsight(summary);
-                  researchInsights.push({ topic, summary, score, url });
-                }
-              }
-            })),
-            { concurrent: 2, exitOnError: false } // Reduced concurrency for clearer output
-          )
-        },
-        {
-          title: '📱 Processing Research',
-          task: async (ctx) => {
-            if (!isSubTopic) {
-              await researchQueue.onIdle();
-
-              // Group insights by topic
-              const insightsByTopic = researchInsights.reduce((acc, insight) => {
-                if (!acc[insight.topic]) acc[insight.topic] = [];
-                acc[insight.topic].push(insight);
-                return acc;
-              }, {});
-
-              // Format insights grouped by topic
-              const topInsights = Object.entries(insightsByTopic)
-                .map(([topic, insights]) => {
-                  const topicInsights = insights
-                    .sort((a, b) => b.score - a.score)
-                    .slice(0, 3)
-                    .map(i => `• ${i.summary}`)
-                    .join('\n');
-                  return `Topic: ${topic}\n${topicInsights}`;
-                })
-                .join('\n\n');
-
-              tweetThread = await generateTweetThread(topInsights);
-            }
-          }
+      if (!isSubTopic) {
+        const newTopics = await discoverNewTopics(content, topic);
+        contentSpinner.text = kleur.blue(`Found ${newTopics.length} related topics`);
+        
+        for (const newTopic of newTopics) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          researchQueue.add(() => researchTopic(newTopic, true));
         }
-      ])
-    }
-  ]);
+      }
 
-  await tasks.run();
+      const score = await prioritizeInsight(summary);
+      researchInsights.push({ topic, summary, score, url });
+    }
+  }
+  contentSpinner.succeed(kleur.green('Content analysis completed'));
+
+  if (!isSubTopic) {
+    const processingSpinner = ora('Processing research...').start();
+    await researchQueue.onIdle();
+
+    const insightsByTopic = researchInsights.reduce((acc, insight) => {
+      if (!acc[insight.topic]) acc[insight.topic] = [];
+      acc[insight.topic].push(insight);
+      return acc;
+    }, {});
+
+    const topInsights = Object.entries(insightsByTopic)
+      .map(([topic, insights]) => {
+        const topicInsights = insights
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3)
+          .map(i => `• ${i.summary}`)
+          .join('\n');
+        return `Topic: ${topic}\n${topicInsights}`;
+      })
+      .join('\n\n');
+
+    tweetThread = await generateTweetThread(topInsights);
+    processingSpinner.succeed(kleur.green('Research processing completed'));
+  }
 
   if (!isSubTopic) {
     console.log('\n📊 Research Coverage:');
