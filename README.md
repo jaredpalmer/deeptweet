@@ -78,3 +78,21 @@ pnpm pretty "latest developments in quantum computing"
 ```
 
 This will generate a researched Twitter thread about quantum computing developments.
+
+## Limitations & Future Improvements
+
+### Content Extraction
+The current implementation uses a naive approach with JSDOM to extract content from web pages, simply pulling all `<p>` tags. This has several limitations:
+- Doesn't account for page structure or content relevance
+- May miss important content in other HTML elements
+- Doesn't handle dynamic content or JavaScript-rendered pages
+- No semantic understanding of content importance
+
+A more robust approach would:
+1. Use proper web scraping tools like Puppeteer or Playwright
+2. Implement text chunking strategies
+3. Use embeddings and vector similarity to identify relevant content
+4. Store embeddings in a vector database for efficient similarity search
+5. Apply semantic analysis to prioritize important content
+
+These improvements would significantly enhance the quality and relevance of the extracted research content.
