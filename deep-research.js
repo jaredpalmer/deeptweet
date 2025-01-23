@@ -8,39 +8,128 @@ import PQueue from 'p-queue';
 import Table from 'cli-table3';
 import readline from 'readline';
 
-// Logger class to manage terminal output
-class Logger {
-  constructor() {
-    this.indent = 0;
+// State management
+const state = {
+  events: [],
+  topics: new Set(),
+  insights: [],
+  currentTasks: new Map(),
+  tweetThread: null,
+  startTime: null,
+  isComplete: false
+};
+
+const EventType = {
+  INFO: 'info',
+  SUCCESS: 'success',
+  ERROR: 'error',
+  TASK_START: 'task_start',
+  TASK_END: 'task_end',
+  INSIGHT_ADDED: 'insight_added',
+  TOPIC_ADDED: 'topic_added'
+};
+
+function addEvent(type, message, data = {}) {
+  state.events.push({
+    type,
+    message,
+    timestamp: Date.now(),
+    data
+  });
+  render();
+}
+
+function clearScreen() {
+  process.stdout.write('\x1Bc');
+}
+
+function render() {
+  clearScreen();
+  
+  // Print banner
+  console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
+  console.log(kleur.bold().cyan('│      DeepTweet Research Tool      │'));
+  console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
+
+  // Print current tasks
+  if (state.currentTasks.size > 0) {
+    console.log(kleur.bold().yellow('🔄 Current Tasks:'));
+    state.currentTasks.forEach((task, id) => {
+      console.log(kleur.dim(`└─ ${task}`));
+    });
+    console.log();
   }
 
-  getPrefix() {
-    return '  '.repeat(this.indent);
+  // Print recent events (last 10)
+  console.log(kleur.bold().yellow('📋 Recent Activity:'));
+  state.events.slice(-10).forEach(event => {
+    const prefix = {
+      [EventType.INFO]: kleur.blue('ℹ'),
+      [EventType.SUCCESS]: kleur.green('✓'),
+      [EventType.ERROR]: kleur.red('✗'),
+      [EventType.TASK_START]: kleur.yellow('→'),
+      [EventType.TASK_END]: kleur.green('←'),
+      [EventType.INSIGHT_ADDED]: kleur.magenta('💡'),
+      [EventType.TOPIC_ADDED]: kleur.cyan('🔍')
+    }[event.type];
+    
+    console.log(`${prefix} ${event.message}`);
+  });
+
+  // Print completion status if done
+  if (state.isComplete) {
+    const duration = ((Date.now() - state.startTime) / 1000).toFixed(1);
+    console.log(kleur.dim(`\n⏱️  Research completed in ${duration}s`));
+    
+    if (state.tweetThread) {
+      console.log('\n' + kleur.bold().cyan('🧵 Generated Tweet Thread:'));
+      console.log(kleur.blue(state.tweetThread));
+    }
+  }
+}
+
+// Logger class to manage state events
+class Logger {
+  constructor() {
+    this.taskId = 0;
+  }
+
+  startTask(message) {
+    const id = `task-${++this.taskId}`;
+    state.currentTasks.set(id, message);
+    addEvent(EventType.TASK_START, message);
+    return id;
+  }
+
+  endTask(id, message) {
+    state.currentTasks.delete(id);
+    addEvent(EventType.TASK_END, message);
   }
 
   log(message) {
-    console.log(this.getPrefix() + message);
+    addEvent(EventType.INFO, message);
   }
 
   success(message) {
-    this.log(kleur.green('✓ ' + message));
+    addEvent(EventType.SUCCESS, message);
   }
 
   error(message) {
-    this.log(kleur.red('✗ ' + message));
+    addEvent(EventType.ERROR, message);
   }
 
   info(message) {
-    this.log(kleur.blue('ℹ ' + message));
+    addEvent(EventType.INFO, message);
   }
 
-  increaseIndent() {
-    this.indent++;
-    return () => this.decreaseIndent();
+  addInsight(insight) {
+    state.insights.push(insight);
+    addEvent(EventType.INSIGHT_ADDED, `New insight for ${insight.topic}`);
   }
 
-  decreaseIndent() {
-    this.indent = Math.max(0, this.indent - 1);
+  addTopic(topic) {
+    state.topics.add(topic);
+    addEvent(EventType.TOPIC_ADDED, `New topic: ${topic}`);
   }
 }
 
