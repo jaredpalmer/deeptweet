@@ -106,8 +106,8 @@ async function researchTopic(topic) {
     {
       title: 'Researching AI Trends',
       task: () => new Listr([
-    {
-      title: '🔍 Searching Google',
+        {
+          title: '🔍 Searching Google',
       task: async (ctx) => {
         searchResults = await searchGoogle(topic);
         urls = [...new Set(
@@ -118,8 +118,8 @@ async function researchTopic(topic) {
         ctx.urls = urls;
       }
     },
-    {
-      title: '📑 Analyzing URLs',
+        {
+          title: '📑 Analyzing URLs',
       task: () => {
         return new Listr([
           {
@@ -143,8 +143,8 @@ async function researchTopic(topic) {
         ]);
       }
     },
-    {
-      title: '📱 Generating Tweet Thread',
+        {
+          title: '📱 Generating Tweet Thread',
       task: async (ctx) => {
         const research = ctx.summaries.join('\n\n---\n\n');
         tweetThread = await generateTweetThread(research);
