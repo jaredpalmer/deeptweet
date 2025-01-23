@@ -1,9 +1,11 @@
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
+import PQueue from 'p-queue';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import 'dotenv/config';
-import Listr from 'listr';
+
+const queue = new PQueue({ concurrency: 2 });
 
 async function parseWeb(url) {
   const abortController = new AbortController();
@@ -59,13 +61,13 @@ async function searchGoogle(query) {
   return data.organic || [];
 }
 
-async function fetchAndExtractContent(url, task) {
+async function fetchAndExtractContent(url) {
   try {
-    task.output = `📥 Processing: ${url}`;
+    console.log(`📥 Fetching and parsing: ${url}`);
     const content = await parseWeb(url);
     return content.slice(0, 4000); // Limit content length
   } catch (error) {
-    task.output = `⚠️ Error: ${error.message}`;
+    console.error(`Error fetching ${url}:`, error.message);
     return '';
   }
 }
@@ -82,83 +84,55 @@ async function summarizeContent(content) {
 async function generateTweetThread(research) {
   const { text } = await generateText({
     model: openai('gpt-4o'),
-    messages: [
-      {
-        role: "system",
-        content: "You are a Twitter Thread Creator. Create a compelling thread from the research provided. Each tweet must be under 280 characters. Create 5-7 tweets that tell an engaging story about the topic. Format each tweet on a new line starting with a number and period (e.g. '1. First tweet')."
-      },
-      {
-        role: "user",
-        content: research
-      }
-    ]
+    prompt: research,
+    system: "You are a Twitter Thread Creator. Create a compelling thread from the research provided. Each tweet must be under 280 characters. Create 5-7 tweets that tell an engaging story about the topic. Format each tweet on a new line starting with a number and period (e.g. '1. First tweet')."
   });
   return text;
 }
 
 async function researchTopic(topic) {
-  let searchResults, urls, contents, research, tweetThread;
+  console.log(`🔍 Starting research on topic: ${topic}`);
+  
+  // Search Google using Serper API
+  console.log(`🌐 Searching for: ${topic}`);
+  const searchResults = await searchGoogle(topic);
+  // Get unique URLs
+  const urls = [...new Set(
+    searchResults
+      .map(result => result.link)
+      .filter(url => url && url.startsWith('http'))
+  )];
 
-  const tasks = new Listr([
-    {
-      title: 'Researching AI Trends',
-      task: () => new Listr([
-        {
-          title: '🔍 Searching Google',
-          task: async (ctx) => {
-            searchResults = await searchGoogle(topic);
-            urls = [...new Set(
-              searchResults
-                .map(result => result.link)
-                .filter(url => url && url.startsWith('http'))
-            )];
-            ctx.urls = urls;
-          }
-        },
-        {
-          title: '📑 Analyzing URLs',
-          task: () => {
-            return new Listr([
-              {
-                title: 'Processing URLs',
-                task: () => new Listr(
-                  urls.map(url => ({
-                    title: `${url.slice(0, 50)}...`,
-                    task: async (ctx, task) => {
-                      const content = await fetchAndExtractContent(url, task);
-                      if (content) {
-                        task.output = '✍️ Generating summary...';
-                        const summary = await summarizeContent(content);
-                        if (!ctx.summaries) ctx.summaries = [];
-                        ctx.summaries.push(`Source: ${url}\n\n${summary}`);
-                      }
-                    }
-                  })),
-                  { concurrent: 2, exitOnError: false }
-                )
-              }
-            ]);
-          }
-        },
-        {
-          title: '📱 Generating Tweet Thread',
-          task: async (ctx) => {
-            const research = ctx.summaries.join('\n\n---\n\n');
-            tweetThread = await generateTweetThread(research);
-          }
-        }
-      ], { collapse: false })
-    }
-  ]);
+  console.log(`📑 Found ${urls.length} unique URLs to analyze`);
 
-  const context = await tasks.run();
+  // Fetch and extract content from each URL using queue
+  const contents = await queue.addAll(
+    urls.map(url => async () => {
+      const content = await fetchAndExtractContent(url);
+      if (content) {
+        console.log(`    📝 Summarizing content from: ${url}`);
+        const summary = await summarizeContent(content);
+        return `Source: ${url}\n\n${summary}`;
+      }
+      return '';
+    })
+  );
 
-  // Display final results
-  console.log('\n📊 Research Results:\n');
+  // Filter out empty results and combine
+  const research = contents.filter(Boolean).join('\n\n---\n\n');
+  
+  console.log('\n📊 Research Results:');
+  console.log('------------------------');
   console.log(research);
-  console.log('\n🧵 Tweet Thread:\n');
-  console.log(tweetThread);
 
+  // Generate tweet thread
+  console.log('\n📱 Generating Tweet Thread...');
+  const tweetThread = await generateTweetThread(research);
+  
+  console.log('\n🧵 Tweet Thread:');
+  console.log('------------------------');
+  console.log(tweetThread);
+  
   return { research, tweetThread };
 }
 
