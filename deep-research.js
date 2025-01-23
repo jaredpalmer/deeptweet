@@ -152,9 +152,10 @@ async function researchTopic(topic, isSubTopic = false) {
   let searchResults, urls, tweetThread;
   const summaries = [];
   
-  console.log(kleur.bold().cyan(`\n🔬 Researching: ${topic}`));
+  const topicSpinner = ora(kleur.bold().cyan(`🔬 Researching: ${topic}`)).start();
+  console.log(); // Add spacing
   
-  const searchSpinner = ora('Searching Google...').start();
+  const searchSpinner = ora(kleur.blue('🔍 Searching Google...')).start();
   try {
     searchResults = await searchGoogle(topic);
     urls = [...new Set(
@@ -162,40 +163,51 @@ async function researchTopic(topic, isSubTopic = false) {
         .map(result => result.link)
         .filter(url => url && url.startsWith('http'))
     )].slice(0, 4);
-    searchSpinner.succeed(kleur.green('Search completed'));
+    searchSpinner.succeed(kleur.green('🔍 Found ' + urls.length + ' relevant sources'));
+    console.log(urls.map(url => kleur.dim(`   └─ ${url}`)).join('\n'));
   } catch (error) {
     searchSpinner.fail(kleur.red(`Search failed: ${error.message}`));
+    topicSpinner.fail(kleur.red(`Research failed for: ${topic}`));
     return;
   }
 
-  const contentSpinner = ora('Analyzing content...').start();
+  console.log(); // Add spacing
+  const contentSpinner = ora(kleur.blue('📑 Starting content analysis...')).start();
   for (const url of urls) {
-    contentSpinner.text = kleur.blue(`Analyzing: ${url.slice(0, 40)}...`);
+    const urlSpinner = ora(kleur.blue(`📄 Processing: ${url.slice(0, 50)}...`)).start();
     
-    const content = await fetchAndExtractContent(url, contentSpinner);
+    const content = await fetchAndExtractContent(url, urlSpinner);
     if (content) {
-      contentSpinner.text = kleur.blue('Generating summary...');
+      urlSpinner.text = kleur.blue('✍️ Generating summary...');
       const summary = await summarizeContent(content);
       summaries.push({ url, summary });
 
+      const score = await prioritizeInsight(summary);
+      researchInsights.push({ topic, summary, score, url });
+      
+      urlSpinner.succeed(kleur.green(`📄 Processed: ${url.slice(0, 50)}`));
+      console.log(kleur.dim(`   └─ ${summary.slice(0, 100)}...`));
+
       if (!isSubTopic) {
+        const topicsSpinner = ora(kleur.blue('🔍 Discovering related topics...')).start();
         const newTopics = await discoverNewTopics(content, topic);
-        contentSpinner.text = kleur.blue(`Found ${newTopics.length} related topics`);
+        topicsSpinner.succeed(kleur.green(`🔍 Found ${newTopics.length} related topics`));
+        console.log(newTopics.map(t => kleur.dim(`   └─ ${t}`)).join('\n'));
         
         for (const newTopic of newTopics) {
           await new Promise(resolve => setTimeout(resolve, 500));
           researchQueue.add(() => researchTopic(newTopic, true));
         }
       }
-
-      const score = await prioritizeInsight(summary);
-      researchInsights.push({ topic, summary, score, url });
+    } else {
+      urlSpinner.fail(kleur.red(`Failed to process: ${url.slice(0, 50)}`));
     }
   }
-  contentSpinner.succeed(kleur.green('Content analysis completed'));
+  contentSpinner.succeed(kleur.green('📑 Content analysis completed'));
 
   if (!isSubTopic) {
-    const processingSpinner = ora('Processing research...').start();
+    console.log(); // Add spacing
+    const processingSpinner = ora(kleur.blue('🔄 Processing research...')).start();
     await researchQueue.onIdle();
 
     const insightsByTopic = researchInsights.reduce((acc, insight) => {
@@ -216,17 +228,19 @@ async function researchTopic(topic, isSubTopic = false) {
       .join('\n\n');
 
     tweetThread = await generateTweetThread(topInsights);
-    processingSpinner.succeed(kleur.green('Research processing completed'));
+    processingSpinner.succeed(kleur.green('🔄 Research processing completed'));
   }
 
   if (!isSubTopic) {
-    console.log('\n📊 Research Coverage:');
-    console.log(`Main topic: ${topic}`);
-    console.log(`Related topics explored: ${Array.from(discoveredTopics).slice(1).join(', ')}`);
-    console.log(`Total insights gathered: ${researchInsights.length}`);
+    topicSpinner.succeed(kleur.green(`✨ Completed research: ${topic}`));
     
-    console.log('\n🧵 Tweet Thread:\n');
-    console.log(tweetThread);
+    console.log('\n' + kleur.bold().cyan('📊 Research Coverage:'));
+    console.log(kleur.blue(`📌 Main topic: ${topic}`));
+    console.log(kleur.blue(`🔍 Related topics: ${Array.from(discoveredTopics).slice(1).join(', ') || 'none'}`));
+    console.log(kleur.blue(`📚 Total insights: ${researchInsights.length}`));
+    
+    console.log('\n' + kleur.bold().cyan('🧵 Generated Tweet Thread:'));
+    console.log(kleur.blue(tweetThread));
 
     return { tweetThread, insights: researchInsights };
   }
