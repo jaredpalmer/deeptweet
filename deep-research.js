@@ -6,11 +6,75 @@ import 'dotenv/config';
 import ora from 'ora';
 import kleur from 'kleur';
 import PQueue from 'p-queue';
-import cliProgress from 'cli-progress';
 import Table from 'cli-table3';
 import readline from 'readline';
 
-const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+// Logger class to manage terminal output
+class Logger {
+  constructor() {
+    this.indent = 0;
+    this.spinners = new Map();
+  }
+
+  getPrefix() {
+    return '  '.repeat(this.indent);
+  }
+
+  log(message) {
+    console.log(this.getPrefix() + message);
+  }
+
+  indent() {
+    this.indent++;
+    return () => this.outdent();
+  }
+
+  outdent() {
+    this.indent = Math.max(0, this.indent - 1);
+  }
+
+  createSpinner(text, id) {
+    const spinner = ora({
+      text: this.getPrefix() + text,
+      color: 'cyan',
+      spinner: {
+        frames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+        interval: 80
+      }
+    }).start();
+    
+    if (id) {
+      this.spinners.set(id, spinner);
+    }
+    
+    return spinner;
+  }
+
+  updateSpinner(id, text) {
+    const spinner = this.spinners.get(id);
+    if (spinner) {
+      spinner.text = this.getPrefix() + text;
+    }
+  }
+
+  succeedSpinner(id, text) {
+    const spinner = this.spinners.get(id);
+    if (spinner) {
+      spinner.succeed(this.getPrefix() + text);
+      this.spinners.delete(id);
+    }
+  }
+
+  failSpinner(id, text) {
+    const spinner = this.spinners.get(id);
+    if (spinner) {
+      spinner.fail(this.getPrefix() + text);
+      this.spinners.delete(id);
+    }
+  }
+}
+
+const logger = new Logger();
 
 function createSpinner(text) {
   return ora({
@@ -23,7 +87,6 @@ function createSpinner(text) {
 }
 
 function printBanner(topic) {
-  console.clear();
   console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
   console.log(kleur.bold().cyan('│      DeepTweet Research Tool      │'));
   console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
@@ -218,6 +281,7 @@ async function prioritizeInsight(insight) {
 
 async function researchTopic(topic, isSubTopic = false) {
   const startTime = Date.now();
+  const topicId = `topic-${topic.replace(/\s+/g, '-')}`;
   
   if (!isSubTopic) {
     printBanner(topic);
@@ -231,10 +295,11 @@ async function researchTopic(topic, isSubTopic = false) {
   let searchResults, urls, tweetThread;
   const summaries = [];
   
-  const topicSpinner = ora(kleur.bold().cyan(`🔬 Researching: ${topic}`)).start();
-  console.log(); // Add spacing
+  const release = logger.indent();
+  const topicSpinner = logger.createSpinner(kleur.bold().cyan(`🔬 Researching: ${topic}`), topicId);
+  logger.log(''); // Add spacing
   
-  const searchSpinner = ora(kleur.blue('🔍 Searching Google...')).start();
+  const searchSpinner = logger.createSpinner(kleur.blue('🔍 Searching Google...'));
   try {
     searchResults = await searchGoogle(topic);
     urls = [...new Set(
@@ -243,15 +308,16 @@ async function researchTopic(topic, isSubTopic = false) {
         .filter(url => url && url.startsWith('http'))
     )].slice(0, 4);
     searchSpinner.succeed(kleur.green('🔍 Found ' + urls.length + ' relevant sources'));
-    console.log(urls.map(url => kleur.dim(`   └─ ${url}`)).join('\n'));
+    urls.forEach(url => logger.log(kleur.dim(`└─ ${url}`)));
   } catch (error) {
     searchSpinner.fail(kleur.red(`Search failed: ${error.message}`));
-    topicSpinner.fail(kleur.red(`Research failed for: ${topic}`));
+    logger.failSpinner(topicId, kleur.red(`Research failed for: ${topic}`));
+    release();
     return;
   }
 
-  console.log(); // Add spacing
-  const contentSpinner = ora(kleur.blue('📑 Starting content analysis...')).start();
+  logger.log(''); // Add spacing
+  const contentSpinner = logger.createSpinner(kleur.blue('📑 Starting content analysis...'));
   for (const url of urls) {
     const urlSpinner = ora(kleur.blue(`📄 Processing: ${url.slice(0, 50)}...`)).start();
     
