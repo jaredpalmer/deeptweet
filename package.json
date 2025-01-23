@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "research": "node research.js",
+    "deep": "node deep-research.js",
+    "basic": "node research.js",
     "pretty": "node pretty-research.js"
   },
   "dependencies": {
@@ -12,6 +13,7 @@
     "dotenv": "^16.3.1",
     "jsdom": "^26.0.0",
     "listr": "^0.14.3",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "p-queue": "^8.1.0"
   }
 }

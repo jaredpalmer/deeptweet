@@ -101,7 +101,7 @@ async function researchTopic(topic) {
 
   const tasks = new Listr([
     {
-      title: 'Researching AI Trends',
+      title: 'Researching',
       task: () => new Listr([
         {
           title: '🔍 Searching Google',
