@@ -8,6 +8,23 @@ import PQueue from 'p-queue';
 
 // Topic discovery and research state
 const researchQueue = new PQueue({ concurrency: 2 });
+
+async function discoverNewTopics(content, originalTopic) {
+  const { text } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: "system",
+        content: "You are a research assistant. Analyze the content and identify 2-3 related subtopics that would be valuable to research further. Return only the topics, one per line. Topics should be specific and focused."
+      },
+      {
+        role: "user",
+        content: `Original topic: ${originalTopic}\n\nContent to analyze:\n${content}`
+      }
+    ]
+  });
+  return text.split('\n').filter(Boolean);
+}
 const discoveredTopics = new Set();
 const researchInsights = [];
 const MAX_TOPICS = 3; // Limit total number of topics to research
