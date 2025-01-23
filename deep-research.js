@@ -343,8 +343,7 @@ async function researchTopic(topic, isSubTopic = false) {
   let searchResults, urls, tweetThread;
   const summaries = [];
   
-  const release = logger.increaseIndent();
-  logger.info(`🔬 Researching: ${topic}`);
+  const taskId = logger.startTask(`🔬 Researching: ${topic}`);
   logger.log(''); // Add spacing
   
   logger.info('🔍 Searching Google...');
@@ -360,7 +359,7 @@ async function researchTopic(topic, isSubTopic = false) {
   } catch (error) {
     logger.error(`Search failed: ${error.message}`);
     logger.error(`Research failed for: ${topic}`);
-    release();
+    logger.endTask(taskId, `❌ Research failed for: ${topic}`);
     return;
   }
 
