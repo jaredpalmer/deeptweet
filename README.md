@@ -1,6 +1,6 @@
 # DeepTweet Research Tool
 
-A tool that researches topics and generates Twitter threads using AI.
+A tool that researches topics and generates Twitter threads using AI. This project demonstrates how to build an agentic workflow using the Vercel AI SDK, showing how to chain together multiple AI operations (search, summarization, content generation) into a cohesive application.
 
 ## Prerequisites
 
