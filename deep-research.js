@@ -24,12 +24,12 @@ class Logger {
     console.log(this.getPrefix() + message);
   }
 
-  indent() {
+  increaseIndent() {
     this.indent++;
-    return () => this.outdent();
+    return () => this.decreaseIndent();
   }
 
-  outdent() {
+  decreaseIndent() {
     this.indent = Math.max(0, this.indent - 1);
   }
 
@@ -295,7 +295,7 @@ async function researchTopic(topic, isSubTopic = false) {
   let searchResults, urls, tweetThread;
   const summaries = [];
   
-  const release = logger.indent();
+  const release = logger.increaseIndent();
   const topicSpinner = logger.createSpinner(kleur.bold().cyan(`🔬 Researching: ${topic}`), topicId);
   logger.log(''); // Add spacing
   
