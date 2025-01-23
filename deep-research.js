@@ -6,6 +6,79 @@ import 'dotenv/config';
 import ora from 'ora';
 import kleur from 'kleur';
 import PQueue from 'p-queue';
+import cliProgress from 'cli-progress';
+import Table from 'cli-table3';
+import readline from 'readline';
+
+const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function createSpinner(text) {
+  return ora({
+    text,
+    spinner: {
+      frames,
+      interval: 80
+    }
+  }).start();
+}
+
+function printBanner(topic) {
+  console.clear();
+  console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
+  console.log(kleur.bold().cyan('│      DeepTweet Research Tool      │'));
+  console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
+  console.log(kleur.bold().yellow(`🎯 Researching: "${topic}"\n`));
+}
+
+function logError(message, details = '') {
+  console.log(kleur.red().bold('\n╭─ ERROR ────────────────────╮'));
+  console.log(kleur.red().bold('│ ') + message);
+  if (details) {
+    console.log(kleur.red().dim('│ ' + details));
+  }
+  console.log(kleur.red().bold('╰────────────────────────────╯\n'));
+}
+
+function displayInsightsTable(insights) {
+  const table = new Table({
+    head: [
+      kleur.cyan('Topic'),
+      kleur.cyan('Score'),
+      kleur.cyan('Summary')
+    ],
+    wordWrap: true,
+    wrapOnWordBoundary: true,
+    colWidths: [20, 8, 50]
+  });
+  
+  insights.forEach(({ topic, score, summary }) => {
+    table.push([
+      topic,
+      score,
+      summary.slice(0, 200) + '...'
+    ]);
+  });
+  
+  console.log('\n' + table.toString());
+}
+
+function setupKeyboardControls() {
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+  }
+  
+  process.stdin.on('keypress', (str, key) => {
+    if (key.ctrl && key.name === 'c') {
+      process.exit();
+    } else if (key.name === 'q') {
+      console.log(kleur.yellow('\n🛑 Research cancelled by user\n'));
+      process.exit();
+    }
+  });
+  
+  console.log(kleur.dim('\n📋 Controls: Ctrl+C to exit, Q to cancel\n'));
+}
 
 // Topic discovery and research state
 const researchQueue = new PQueue({ concurrency: 1 }); // Reduce concurrency for clearer output
@@ -144,6 +217,12 @@ async function prioritizeInsight(insight) {
 }
 
 async function researchTopic(topic, isSubTopic = false) {
+  const startTime = Date.now();
+  
+  if (!isSubTopic) {
+    printBanner(topic);
+    setupKeyboardControls();
+  }
   if (discoveredTopics.has(topic) || discoveredTopics.size >= MAX_TOPICS) {
     return;
   }
@@ -239,8 +318,13 @@ async function researchTopic(topic, isSubTopic = false) {
     console.log(kleur.blue(`🔍 Related topics: ${Array.from(discoveredTopics).slice(1).join(', ') || 'none'}`));
     console.log(kleur.blue(`📚 Total insights: ${researchInsights.length}`));
     
+    displayInsightsTable(researchInsights);
+    
     console.log('\n' + kleur.bold().cyan('🧵 Generated Tweet Thread:'));
     console.log(kleur.blue(tweetThread));
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(kleur.dim(`\n⏱️  Research completed in ${duration}s`));
 
     return { tweetThread, insights: researchInsights };
   }
