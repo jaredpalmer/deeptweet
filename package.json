@@ -1,0 +1,13 @@
+{
+  "name": "deeptweet",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/openai": "^1.1.2",
+    "ai": "^4.1.2",
+    "dotenv": "^16.3.1",
+    "jsdom": "^26.0.0",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^7.4.1"
+  }
+}
