@@ -144,7 +144,7 @@ async function researchTopic(topic, isSubTopic = false) {
   }
   discoveredTopics.add(topic);
 
-  let searchResults, urls;
+  let searchResults, urls, tweetThread;
 
   const tasks = new Listr([
     {
