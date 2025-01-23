@@ -1,12 +1,9 @@
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import PQueue from 'p-queue';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import 'dotenv/config';
 import Listr from 'listr';
-
-const queue = new PQueue({ concurrency: 2 });
 
 async function parseWeb(url) {
   const abortController = new AbortController();
