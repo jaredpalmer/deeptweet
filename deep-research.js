@@ -7,7 +7,10 @@ import Listr from 'listr';
 import PQueue from 'p-queue';
 
 // Topic discovery and research state
-const researchQueue = new PQueue({ concurrency: 2 });
+const researchQueue = new PQueue({ concurrency: 1 }); // Reduce concurrency for clearer output
+const discoveredTopics = new Set();
+const researchInsights = [];
+const MAX_TOPICS = 3;
 
 async function discoverNewTopics(content, originalTopic) {
   const { text } = await generateText({
@@ -15,7 +18,7 @@ async function discoverNewTopics(content, originalTopic) {
     messages: [
       {
         role: "system",
-        content: "You are a research assistant. Analyze the content and identify 2-3 related subtopics that would be valuable to research further. Return only the topics, one per line. Topics should be specific and focused."
+        content: "You are a research assistant. Analyze the content and identify 2-3 related subtopics that would be valuable to research further. Topics should be specific and focused. Format as a numbered list."
       },
       {
         role: "user",
@@ -23,11 +26,12 @@ async function discoverNewTopics(content, originalTopic) {
       }
     ]
   });
-  return text.split('\n').filter(Boolean);
+  
+  // Parse numbered list format
+  return text.split('\n')
+    .map(line => line.replace(/^\d+\.\s*/, '').trim())
+    .filter(Boolean);
 }
-const discoveredTopics = new Set();
-const researchInsights = [];
-const MAX_TOPICS = 3; // Limit total number of topics to research
 
 async function parseWeb(url) {
   const abortController = new AbortController();
@@ -158,74 +162,80 @@ async function researchTopic(topic, isSubTopic = false) {
               searchResults
                 .map(result => result.link)
                 .filter(url => url && url.startsWith('http'))
-            )];
+            )].slice(0, 4); // Limit to top 4 URLs for cleaner output
             ctx.urls = urls;
           }
         },
         {
-          title: '📑 Analyzing URLs',
-          task: () => {
-            return new Listr([
-              {
-                title: 'Processing URLs',
-                task: () => new Listr(
-                  urls.map(url => ({
-                    title: `${url.slice(0, 50)}...`,
-                    task: async (ctx, task) => {
-                      const content = await fetchAndExtractContent(url, task);
-                      if (content) {
-                        task.output = '✍️ Generating summary...';
-                        const summary = await summarizeContent(content);
-                        if (!ctx.summaries) ctx.summaries = [];
-                        ctx.summaries.push(`Source: ${url}\n\n${summary}`);
-                        
-                        // Discover and queue new topics
-                        if (!isSubTopic) {
-                          const newTopics = await discoverNewTopics(content, topic);
-                          for (const newTopic of newTopics) {
-                            researchQueue.add(() => researchTopic(newTopic, true));
-                          }
-                        }
+          title: '📑 Analyzing Content',
+          task: () => new Listr(
+            urls.map(url => ({
+              title: `${url.slice(0, 40)}...`,
+              task: async (ctx, task) => {
+                const content = await fetchAndExtractContent(url, task);
+                if (content) {
+                  task.output = '✍️ Generating summary...';
+                  const summary = await summarizeContent(content);
+                  if (!ctx.summaries) ctx.summaries = [];
+                  ctx.summaries.push({ url, summary });
 
-                        // Score and store insight
-                        const score = await prioritizeInsight(summary);
-                        researchInsights.push({ topic, summary, score, url });
-                      }
+                  if (!isSubTopic) {
+                    // Discover new topics
+                    const newTopics = await discoverNewTopics(content, topic);
+                    task.output = `🔍 Found ${newTopics.length} related topics`;
+                    
+                    // Queue new topics with a delay for clearer output
+                    for (const newTopic of newTopics) {
+                      await new Promise(resolve => setTimeout(resolve, 500));
+                      researchQueue.add(() => researchTopic(newTopic, true));
                     }
-                  })),
-                  { concurrent: 4, exitOnError: false }
-                )
+                  }
+
+                  // Score and store insight
+                  const score = await prioritizeInsight(summary);
+                  researchInsights.push({ topic, summary, score, url });
+                }
               }
-            ]);
-          }
+            })),
+            { concurrent: 2, exitOnError: false } // Reduced concurrency for clearer output
+          )
         },
         {
           title: '📱 Processing Research',
           task: async (ctx) => {
             if (!isSubTopic) {
-              // Wait for all queued research to complete
               await researchQueue.onIdle();
 
-              // Sort insights by score and take top ones
-              const topInsights = researchInsights
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 10)
-                .map(i => `Topic: ${i.topic}\nSource: ${i.url}\n\n${i.summary}`)
-                .join('\n\n---\n\n');
+              // Group insights by topic
+              const insightsByTopic = researchInsights.reduce((acc, insight) => {
+                if (!acc[insight.topic]) acc[insight.topic] = [];
+                acc[insight.topic].push(insight);
+                return acc;
+              }, {});
 
-              // Generate final tweet thread
+              // Format insights grouped by topic
+              const topInsights = Object.entries(insightsByTopic)
+                .map(([topic, insights]) => {
+                  const topicInsights = insights
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 3)
+                    .map(i => `• ${i.summary}`)
+                    .join('\n');
+                  return `Topic: ${topic}\n${topicInsights}`;
+                })
+                .join('\n\n');
+
               tweetThread = await generateTweetThread(topInsights);
             }
           }
         }
-      ], { collapse: false })
+      ])
     }
   ]);
 
   await tasks.run();
 
   if (!isSubTopic) {
-    // Only display results for main topic
     console.log('\n📊 Research Coverage:');
     console.log(`Main topic: ${topic}`);
     console.log(`Related topics explored: ${Array.from(discoveredTopics).slice(1).join(', ')}`);
