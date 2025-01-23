@@ -108,49 +108,51 @@ async function researchTopic(topic) {
       task: () => new Listr([
         {
           title: '🔍 Searching Google',
-      task: async (ctx) => {
-        searchResults = await searchGoogle(topic);
-        urls = [...new Set(
-          searchResults
-            .map(result => result.link)
-            .filter(url => url && url.startsWith('http'))
-        )];
-        ctx.urls = urls;
-      }
-    },
+          task: async (ctx) => {
+            searchResults = await searchGoogle(topic);
+            urls = [...new Set(
+              searchResults
+                .map(result => result.link)
+                .filter(url => url && url.startsWith('http'))
+            )];
+            ctx.urls = urls;
+          }
+        },
         {
           title: '📑 Analyzing URLs',
-      task: () => {
-        return new Listr([
-          {
-            title: 'Processing URLs',
-            task: () => new Listr(
-              urls.map(url => ({
-                title: `${url.slice(0, 50)}...`,
-                task: async (ctx, task) => {
-                  const content = await fetchAndExtractContent(url, task);
-                  if (content) {
-                    task.output = '✍️ Generating summary...';
-                    const summary = await summarizeContent(content);
-                    if (!ctx.summaries) ctx.summaries = [];
-                    ctx.summaries.push(`Source: ${url}\n\n${summary}`);
-                  }
-                }
-              })),
-              { concurrent: 2, exitOnError: false }
-            )
+          task: () => {
+            return new Listr([
+              {
+                title: 'Processing URLs',
+                task: () => new Listr(
+                  urls.map(url => ({
+                    title: `${url.slice(0, 50)}...`,
+                    task: async (ctx, task) => {
+                      const content = await fetchAndExtractContent(url, task);
+                      if (content) {
+                        task.output = '✍️ Generating summary...';
+                        const summary = await summarizeContent(content);
+                        if (!ctx.summaries) ctx.summaries = [];
+                        ctx.summaries.push(`Source: ${url}\n\n${summary}`);
+                      }
+                    }
+                  })),
+                  { concurrent: 2, exitOnError: false }
+                )
+              }
+            ]);
           }
-        ]);
-      }
-    },
+        },
         {
           title: '📱 Generating Tweet Thread',
-      task: async (ctx) => {
-        const research = ctx.summaries.join('\n\n---\n\n');
-        tweetThread = await generateTweetThread(research);
-      }
-    }
-  ])}, { collapse: false });
+          task: async (ctx) => {
+            const research = ctx.summaries.join('\n\n---\n\n');
+            tweetThread = await generateTweetThread(research);
+          }
+        }
+      ])
+    }, { collapse: false }
+  ]);
 
   const context = await tasks.run();
 
