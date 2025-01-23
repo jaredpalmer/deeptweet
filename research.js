@@ -150,8 +150,8 @@ async function researchTopic(topic) {
             tweetThread = await generateTweetThread(research);
           }
         }
-      ])
-    }, { collapse: false }
+      ], { collapse: false })
+    }
   ]);
 
   const context = await tasks.run();
