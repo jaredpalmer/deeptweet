@@ -161,8 +161,8 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
-  // Step 6: Final quality check and improvements
-  console.log(kleur.dim('Polishing content...'));
+  // Step 6: Initial quality check
+  console.log(kleur.dim('Initial polish...'));
   const { object: improved } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
@@ -173,13 +173,36 @@ async function research(topic: string): Promise<BlogPost> {
 1. Clear business value
 2. Technical accuracy
 3. Engaging style
-4. Actionable insights`,
+4. Actionable insights
+5. Add relevant citations using [^1] style footnotes`,
       },
       {
         role: 'user',
         content: `Title: ${outline.title}\n\nSummary: ${summary}\n\n${sections
           .map((s) => `${s.title}\n\n${s.content}`)
-          .join('\n\n')}\n\n${conclusion}`,
+          .join('\n\n')}\n\n${conclusion}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+      },
+    ],
+  });
+
+  // Step 7: Final flow improvement
+  console.log(kleur.dim('Final polish...'));
+  const { object: final } = await generateObject({
+    model: openai('gpt-4o-mini'),
+    schema: blogPostSchema,
+    messages: [
+      {
+        role: 'system',
+        content: `Review this blog post and improve its flow and readability. Make sure:
+1. Sections transition smoothly
+2. Ideas build on each other logically
+3. The narrative is compelling
+4. Citations are properly placed
+Keep all technical content and citations intact.`,
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(improved),
       },
     ],
   });
@@ -192,13 +215,13 @@ async function research(topic: string): Promise<BlogPost> {
   const readingTime = Math.ceil(wordCount / 200);
 
   return {
-    ...improved,
-    content: improved.content,
-    subtitle: improved.subtitle,
+    ...final,
+    content: final.content,
+    subtitle: final.subtitle,
     metadata: {
       reading_time: readingTime,
-      technical_level: 3, // Default mid-level
-      business_impact: 3  // Default mid-level
+      technical_level: final.metadata.technical_level,
+      business_impact: final.metadata.business_impact
     },
     references: sourceList.map(url => ({
       url,
