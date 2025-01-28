@@ -376,13 +376,16 @@ async function research(topic: string): Promise<BlogPost> {
           ],
         });
 
-        improvedParts.push(improvedPart);
-      }
-    } catch (error) {
-      console.error(kleur.red(`\nError processing ${part.type}:`), error);
-      // Continue with next part
-      continue;
-    }
+          return improvedPart;
+        } catch (error) {
+          console.error(kleur.red(`\nError processing ${part.type}:`), error);
+          return null; // Return null for failed parts
+        }
+      })
+    );
+    
+    improvedParts.push(...batchResults.filter(Boolean)); // Filter out failed parts
+    process.stdout.write(`\r${kleur.dim(`Processed ${improvedParts.length}/${contentParts.length} parts...`)}`);
   }
 
   // Combine improved parts
