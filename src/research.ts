@@ -207,19 +207,13 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Step 3: Generate blog post outline
   console.log(kleur.dim('Creating outline...'));
-  const { text: outlineJson } = await generateText({
+  const outline = await generateObject({
     model: openai('gpt-4o-mini'),
+    schema: outlineSchema,
     messages: [
       {
         role: 'system',
-        content: `Create an outline for a technical blog post about ${topic}. 
-        Return as JSON with format:
-        {
-          "title": "engaging title",
-          "sections": [
-            { "title": "section title", "key_points": ["point 1", "point 2"] }
-          ]
-        }`,
+        content: `Create an outline for a technical blog post about ${topic}. Include a compelling title and key points to cover in each section.`,
       },
       {
         role: 'user',
@@ -227,8 +221,6 @@ async function research(topic: string): Promise<BlogPost> {
       },
     ],
   });
-
-  const outline = JSON.parse(outlineJson);
 
   // Step 4: Generate each section
   console.log(kleur.dim('Writing sections...'));
@@ -292,23 +284,17 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Step 6: Final quality check and improvements
   console.log(kleur.dim('Polishing content...'));
-  const { text: improvedContent } = await generateText({
+  const improved = await generateObject({
     model: openai('gpt-4o-mini'),
+    schema: blogPostSchema,
     messages: [
       {
         role: 'system',
         content: `Review and improve this blog post. Focus on:
-        1. Clear business value
-        2. Technical accuracy
-        3. Engaging style
-        4. Actionable insights
-        Return the improved version with this JSON structure:
-        {
-          "title": "string",
-          "summary": "string",
-          "sections": [{"title": "string", "content": "string"}],
-          "conclusion": "string"
-        }`,
+1. Clear business value
+2. Technical accuracy
+3. Engaging style
+4. Actionable insights`,
       },
       {
         role: 'user',
@@ -320,8 +306,6 @@ async function research(topic: string): Promise<BlogPost> {
   });
 
   console.log(kleur.green('✓ Blog post generated!'));
-
-  const improved = JSON.parse(improvedContent);
   return {
     title: improved.title,
     summary: improved.summary,
