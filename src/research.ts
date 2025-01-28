@@ -63,7 +63,9 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('\nPhase 2: Content Analysis'));
   console.log(kleur.dim('─'.repeat(30)));
-  process.stdout.write(kleur.dim('Analyzing relevance... '));
+  
+  // Process chunks
+  process.stdout.write(kleur.dim('Processing content chunks... '));
   const allSentences = contents.flatMap((content) => {
     return content.chunks
       .filter((s) => s.trim().length > 50) // Filter out short chunks
@@ -76,12 +78,17 @@ async function research(topic: string): Promise<BlogPost> {
         },
       }));
   });
+  process.stdout.write(kleur.green('✓\n'));
+  console.log(kleur.dim(`Found ${allSentences.length} content chunks`));
 
+  // Find most relevant content
+  process.stdout.write(kleur.dim('Analyzing relevance with embeddings... '));
   const sentences = allSentences.map((s) => s.text);
-
   const topSentenceIndices = await findSimilarSentences(topic, sentences, {
     topK: 10,
   });
+  process.stdout.write(kleur.green('✓\n'));
+
   // Get the most relevant content with their sources
   const relevantContent = topSentenceIndices.map((i) => allSentences[i]);
   const mostRelevantContent = relevantContent.map((c) => c.text).join('\n\n');
@@ -101,8 +108,18 @@ async function research(topic: string): Promise<BlogPost> {
     .map(source => source.url)
     .filter(Boolean);
 
-  process.stdout.write(kleur.green('✓\n'));
-  console.log(kleur.dim(`Found ${relevantContent.length} relevant passages`));
+  // Show summary of findings
+  console.log(kleur.dim('\nContent Analysis Summary:'));
+  console.log(kleur.dim('• ') + `${relevantContent.length} most relevant passages selected`);
+  console.log(kleur.dim('• ') + `${sourceList.length} unique sources identified`);
+  
+  // Show a preview of top content (first 100 chars of first 2 passages)
+  console.log(kleur.dim('\nTop Passages Preview:'));
+  relevantContent.slice(0, 2).forEach((content, i) => {
+    const preview = content.text.slice(0, 100).trim() + '...';
+    console.log(kleur.dim(`${i + 1}. `) + preview);
+    console.log(kleur.dim(`   Source: ${content.source.hostname || 'unknown'}\n`));
+  });
 
   // Step 3: Generate blog post outline
   console.log(kleur.dim('\nPhase 3: Content Generation'));
