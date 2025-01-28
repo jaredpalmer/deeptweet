@@ -53,15 +53,63 @@ async function parseWeb(url: string): Promise<string[]> {
   });
 
   const { document } = dom.window;
-  const textElTags = 'p';
-  const paragraphs = document.querySelectorAll(textElTags);
-  if (!paragraphs.length) {
-    throw new Error(`webpage doesn't have any "${textElTags}" element`);
-  }
-  const paragraphTexts = Array.from(paragraphs).map((p) => p.textContent);
+  // Try multiple selectors to find text content
+  const selectors = [
+    'p',                           // Standard paragraphs
+    'article',                     // Article content
+    '.content',                    // Common content class
+    '[role="main"]',              // Main content area
+    'div > p',                    // Paragraphs in divs
+    '.post-content',              // Blog post content
+    'main',                       // Main content
+    'div:not(:empty)',           // Any non-empty div as fallback
+  ];
 
-  // combine text contents from paragraphs and then remove newlines and multiple spaces
-  const text = paragraphTexts.join(' ').replace(/ {2}|\r\n|\n|\r/gm, '');
+  let textElements: Element[] = [];
+  
+  // Try each selector until we find content
+  for (const selector of selectors) {
+    textElements = Array.from(document.querySelectorAll(selector));
+    if (textElements.length > 0) break;
+  }
+
+  // If we still don't have content, try getting all text nodes
+  if (!textElements.length) {
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    textElements = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.textContent?.trim()) {
+        textElements.push(node);
+      }
+    }
+  }
+
+  // Extract and clean text content
+  const textContents = textElements
+    .map(el => el.textContent?.trim())
+    .filter(Boolean)
+    .map(text => 
+      text
+        .replace(/\s+/g, ' ')           // Normalize whitespace
+        .replace(/[^\S\r\n]+/g, ' ')    // Convert multiple spaces to single
+        .replace(/\n{2,}/g, '\n')       // Normalize line breaks
+        .trim()
+    );
+
+  // Combine all text
+  const text = textContents.join(' ').trim();
+
+  // Return empty array if no meaningful content found
+  if (!text) {
+    console.warn(`No text content found for ${url}`);
+    return [];
+  }
 
   return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
 }
