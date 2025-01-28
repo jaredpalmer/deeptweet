@@ -257,41 +257,100 @@ async function research(topic: string): Promise<BlogPost> {
     { type: 'conclusion', content: conclusion },
   ];
 
-  // Process each part with progress updates
+  // Process each part with progress updates and error handling
   const improvedParts: any[] = [];
   for (const part of contentParts) {
-    process.stdout.write(
-      `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
-    );
+    try {
+      process.stdout.write(
+        `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
+      );
 
-    const { object: improvedPart } = await generateObject({
-      model: openai('gpt-4o-mini'),
-      schema: blogPostSchema,
-      messages: [
-        {
-          role: 'system',
-          content: `Improve this ${part.type} section. Focus on:
+      // Prepare content
+      const content = part.type === 'section'
+        ? `${(part as { title: string }).title}\n\n${part.content}`
+        : part.content;
+
+      // Check token count
+      const tokenCount = estimateTokenCount(content);
+      if (tokenCount > 30000) {
+        console.log(kleur.yellow(`\nWarning: Content too large (${tokenCount} tokens), splitting...`));
+        const chunks = splitForTokenLimit(content);
+        console.log(kleur.dim(`Split into ${chunks.length} chunks`));
+
+        // Process each chunk
+        const improvedChunks = await Promise.all(chunks.map(async (chunk, i) => {
+          process.stdout.write(
+            `\r${kleur.dim(`Processing chunk ${i + 1}/${chunks.length}...`.padEnd(40))}`
+          );
+          
+          const { object: improved } = await generateObject({
+            model: openai('gpt-4o-mini'),
+            schema: blogPostSchema,
+            messages: [
+              {
+                role: 'system',
+                content: `Improve this ${part.type} section chunk. Focus on:
 1. Clear business value
 2. Technical accuracy
 3. Engaging style
 4. Actionable insights
 5. Add relevant citations using [^1] style footnotes where appropriate`,
-        },
-        {
-          role: 'user',
-          content:
-            part.type === 'section'
-              ? `${(part as { title: string }).title}\n\n${
-                  part.content
-                }\n\nAvailable sources:\n${sourceList.join('\n')}`
-              : `${part.content}\n\nAvailable sources:\n${sourceList.join(
-                  '\n'
-                )}`,
-        },
-      ],
-    });
+              },
+              {
+                role: 'user',
+                content: `${chunk}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+              },
+            ],
+          });
+          return improved;
+        }));
 
-    improvedParts.push(improvedPart);
+        // Combine chunks
+        const { object: combinedImprovement } = await generateObject({
+          model: openai('gpt-4o-mini'),
+          schema: blogPostSchema,
+          messages: [
+            {
+              role: 'system',
+              content: 'Combine these improved chunks into a cohesive section, maintaining all improvements and citations.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(improvedChunks),
+            },
+          ],
+        });
+
+        improvedParts.push(combinedImprovement);
+      } else {
+        // Process normally if within token limit
+        const { object: improvedPart } = await generateObject({
+          model: openai('gpt-4o-mini'),
+          schema: blogPostSchema,
+          messages: [
+            {
+              role: 'system',
+              content: `Improve this ${part.type} section. Focus on:
+1. Clear business value
+2. Technical accuracy
+3. Engaging style
+4. Actionable insights
+5. Add relevant citations using [^1] style footnotes where appropriate`,
+            },
+            {
+              role: 'user',
+              content: `${content}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+            },
+          ],
+        });
+
+        improvedParts.push(improvedPart);
+      }
+    } catch (error) {
+      console.error(kleur.red(`\nError processing ${part.type}:`), error);
+      // Continue with next part
+      continue;
+    }
   }
 
   // Combine improved parts
