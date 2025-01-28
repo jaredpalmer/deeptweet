@@ -15,39 +15,39 @@ export async function writeBlogPostMarkdown(blogPost: BlogPost, topic: string) {
 
 ${blogPost.subtitle}
 
-## Summary
-
 ${blogPost.summary}
 
-${blogPost.sections.map(section => `
-## ${section.title}
-
-${section.content}
-
-### Key Takeaways
-${section.key_takeaways.map(point => `- ${point}`).join('\n')}
-
-### Sources
-${section.sources.map(url => `- ${url}`).join('\n')}
-`).join('\n')}
-
-## Conclusion
-
-${blogPost.conclusion}
-
-## Next Steps
-
-${blogPost.next_steps.map(step => `- ${step}`).join('\n')}
-
-## Further Reading
-
-${blogPost.further_reading.map(ref => `- [${ref.title}](${ref.url}) - ${ref.why_relevant}`).join('\n')}
+${blogPost.content.map(block => {
+  if (block.type === 'heading') {
+    return `${'#'.repeat(block.level || 2)} ${block.text}\n`;
+  }
+  
+  let text = block.text;
+  
+  // Add inline citations if present
+  if (block.citations?.length) {
+    block.citations.forEach((citation, idx) => {
+      text = text.replace(
+        citation.text,
+        `${citation.text}[^${idx + 1}]`
+      );
+    });
+  }
+  
+  return text;
+}).join('\n\n')}
 
 ---
 
 *Reading time: ${blogPost.metadata.reading_time} minutes*  
-*Technical depth: ${blogPost.metadata.technical_level}/5*  
+*Technical level: ${blogPost.metadata.technical_level}/5*  
 *Business impact: ${blogPost.metadata.business_impact}/5*
+
+## References
+
+${blogPost.references.map((ref, idx) => 
+  `[^${idx + 1}]: [${ref.title}](${ref.url}) via ${ref.site}`
+).join('\n')}
 `;
 
   const outputPath = path.join(outputDir, `${filename}.md`);
