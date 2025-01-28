@@ -15,8 +15,15 @@ import { researchAgents } from './agents';
 const MAX_N_PAGES_EMBED = 5;
 
 async function research(topic: string): Promise<BlogPost> {
+  console.log(kleur.bold().blue('\n🔍 Starting Research: ') + kleur.bold(topic));
+  console.log(kleur.dim('═'.repeat(50)));
+
   // Step 1: Generate optimized search queries
-  console.log(kleur.blue('🔍 Researching: ') + topic);
+  const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  const spinnerInterval = setInterval(() => {
+    process.stdout.write(`\r${kleur.cyan(spinner[i++ % spinner.length])} Generating search queries...`);
+  }, 80);
 
   // Generate multiple search queries for different aspects
   const queries = await Promise.all([
@@ -39,15 +46,23 @@ async function research(topic: string): Promise<BlogPost> {
     ]),
   ]);
 
+  clearInterval(spinnerInterval);
+  process.stdout.write('\r✓ Search queries generated\n');
+
   // Step 2: Search and extract content from multiple angles
-  console.log(kleur.dim('Searching...'));
+  console.log(kleur.dim('\nPhase 1: Content Discovery'));
+  console.log(kleur.dim('─'.repeat(30)));
   const allResults = await Promise.all(queries.map(searchGoogle));
   const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
 
   const contents = await Promise.all(Array.from(uniqueUrls).map(parseWeb));
 
+  console.log(kleur.green(`✓ Found ${uniqueUrls.size} unique sources`));
+
   // Step 2.5: Find most relevant content using embeddings
-  console.log(kleur.dim('Analyzing relevance...'));
+  console.log(kleur.dim('\nPhase 2: Content Analysis'));
+  console.log(kleur.dim('─'.repeat(30)));
+  process.stdout.write(kleur.dim('Analyzing relevance... '));
   const allSentences = contents.flatMap((content) => {
     return content.chunks
       .filter((s) => s.trim().length > 50) // Filter out short chunks
@@ -85,8 +100,13 @@ async function research(topic: string): Promise<BlogPost> {
     .map(source => source.url)
     .filter(Boolean);
 
+  process.stdout.write(kleur.green('✓\n'));
+  console.log(kleur.dim(`Found ${relevantContent.length} relevant passages`));
+
   // Step 3: Generate blog post outline
-  console.log(kleur.dim('Creating outline...'));
+  console.log(kleur.dim('\nPhase 3: Content Generation'));
+  console.log(kleur.dim('─'.repeat(30)));
+  process.stdout.write(kleur.dim('Creating outline... '));
   const { object: outline } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: outlineSchema,
@@ -102,8 +122,10 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
+  process.stdout.write(kleur.green('✓\n'));
+
   // Step 4: Generate each section
-  console.log(kleur.dim('Writing sections...'));
+  process.stdout.write(kleur.dim('Writing sections... '));
   const sections = await Promise.all(
     outline.sections.map(async (section: any) => {
       const { text: content } = await generateText({
@@ -130,8 +152,10 @@ async function research(topic: string): Promise<BlogPost> {
     })
   );
 
+  process.stdout.write(kleur.green('✓\n'));
+
   // Step 5: Generate summary and conclusion
-  console.log(kleur.dim('Finishing up...'));
+  process.stdout.write(kleur.dim('Generating summary... '));
   const { text: summary } = await generateText({
     model: openai('gpt-4o-mini'),
     messages: [
@@ -162,8 +186,12 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
-  // Step 6: Initial quality check
-  console.log(kleur.dim('Initial polish...'));
+  process.stdout.write(kleur.green('✓\n'));
+
+  // Step 6: Quality Improvement
+  console.log(kleur.dim('\nPhase 4: Quality Enhancement'));
+  console.log(kleur.dim('─'.repeat(30)));
+  process.stdout.write(kleur.dim('Initial polish... '));
   const { object: improved } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
@@ -186,12 +214,16 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
+  process.stdout.write(kleur.green('✓\n'));
+
   // Step 7: Expert Review & Improvements
-  console.log(kleur.dim('Running expert analysis...'));
+  console.log(kleur.dim('\nPhase 5: Expert Review'));
+  console.log(kleur.dim('─'.repeat(30)));
   
   const agentAnalyses = await Promise.all(
     researchAgents.map(async agent => {
-      console.log(kleur.dim(`- ${agent.name} analyzing...`));
+      process.stdout.write(kleur.dim(`${agent.name}... `));
+      process.stdout.write(kleur.green('✓ '));
       const feedback = await agent.analyze(JSON.stringify(improved));
       return {
         agent: agent.name,
@@ -242,8 +274,9 @@ Keep all citations and maintain the overall structure.`
     ]
   });
 
-  // Step 8: Final flow improvement
-  console.log(kleur.dim('Final polish...'));
+  console.log(kleur.dim('\nPhase 6: Final Polish'));
+  console.log(kleur.dim('─'.repeat(30)));
+  process.stdout.write(kleur.dim('Improving flow... '));
   const { object: final } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
@@ -264,7 +297,10 @@ Keep all technical content and citations intact.`,
     ],
   });
 
-  console.log(kleur.green('✓ Blog post generated!'));
+  process.stdout.write(kleur.green('✓\n'));
+  
+  console.log(kleur.bold().green('\n✨ Blog Post Generated Successfully! ✨'));
+  console.log(kleur.dim('═'.repeat(50)));
   // Calculate reading time (rough estimate: 200 words per minute)
   const wordCount = improved.content
     .map(block => block.text.split(/\s+/).length)
