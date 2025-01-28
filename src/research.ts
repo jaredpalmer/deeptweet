@@ -11,6 +11,7 @@ import { generateQuery } from './generate-query';
 import { chunk } from './utils';
 import { BlogPost } from './schemas';
 import { researchAgents } from './agents';
+import fs from 'fs/promises';
 
 const MAX_N_PAGES_EMBED = 5;
 
@@ -345,6 +346,9 @@ research(topic)
     // Write markdown file
     const outputPath = await writeBlogPostMarkdown(blogPost, topic);
     console.log(kleur.green(`\n✓ Blog post written to: ${outputPath}\n`));
+
+    // Create output directory if it doesn't exist
+    await fs.mkdir('output', { recursive: true });
 
     // Print the blog post
     console.log('\n' + kleur.bold().cyan('╭─────────────────────╮'));
