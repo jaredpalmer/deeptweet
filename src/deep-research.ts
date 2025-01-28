@@ -20,10 +20,18 @@ interface State {
   }>;
   startTime: number | null;
   isComplete: boolean;
-  costs: {
-    tokens: number;
-    cost: number;
-  };
+}
+
+interface BlogPost {
+  title: string;
+  summary: string;
+  sections: {
+    title: string;
+    content: string;
+    resources: string[];
+  }[];
+  conclusion: string;
+  resources: string[];
 }
 
 interface SearchResult {
@@ -677,27 +685,31 @@ async function prioritizeInsight(insight: string): Promise<number> {
   return score;
 }
 
-async function researchTopic(
-  topic: string,
-  isSubTopic: boolean = false,
-  parentTopic?: string
-): Promise<{ tweetThread: string; insights: Insight[] } | void> {
-  const startTime = Date.now();
-
-  if (!isSubTopic) {
-    printBanner(topic);
-    setupKeyboardControls();
-  }
-  if (discoveredTopics.has(topic) || discoveredTopics.size >= MAX_TOPICS) {
-    return;
-  }
-  discoveredTopics.add(topic);
-
-  let searchResults, urls, tweetThread;
-  const summaries = [];
+async function researchAndWrite(topic: string): Promise<BlogPost> {
+  printBanner(topic);
+  setupKeyboardControls();
+  state.startTime = Date.now();
 
   const taskId = logger.startTask(`🔬 Researching: ${topic}`);
-  logger.log(''); // Add spacing
+  logger.log('');
+
+  // 1. Generate optimized search query
+  logger.info('🔍 Creating focused search query...');
+  const searchQuery = await generateText({
+    model: openai('gpt-4o-mini'),
+    messages: [
+      {
+        role: 'system',
+        content: 'Create a search query to find high-quality business and technical information about this topic. Focus on recent, authoritative sources.'
+      },
+      { role: 'user', content: topic }
+    ]
+  });
+
+  // 2. Get search results
+  logger.info(`🔍 Searching for: ${searchQuery.text}`);
+  const searchResults = await searchGoogle(searchQuery.text);
+  const mainSource = searchResults[0]; // Focus on best result first
 
   logger.info('🔍 Generating optimized search query...');
   try {
