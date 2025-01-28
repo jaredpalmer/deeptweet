@@ -12,21 +12,18 @@ import { chunk } from './utils.js';
 import { findSimilarSentences } from './find-similar-sentences.js';
 import { critiquePaper, improveSection } from './agents.js';
 
-interface Event {
-  type: EventType;
-  message: string;
-  timestamp: number;
-  data: Record<string, any>;
-}
-
 interface State {
-  events: Event[];
-  topics: Set<string>;
-  insights: Insight[];
-  currentTasks: Map<string, string>;
-  tweetThread: string | null;
+  events: Array<{
+    type: 'info' | 'success' | 'error';
+    message: string;
+    timestamp: number;
+  }>;
   startTime: number | null;
   isComplete: boolean;
+  costs: {
+    tokens: number;
+    cost: number;
+  };
 }
 
 interface SearchResult {
