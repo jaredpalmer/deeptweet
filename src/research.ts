@@ -4,10 +4,10 @@ import { openai } from '@ai-sdk/openai';
 import kleur from 'kleur';
 import 'dotenv/config';
 import { parseWeb } from './web/scrape';
-import { searchGoogle, SearchResult } from './web/search';
+import { searchGoogle } from './web/search';
 import { findSimilarSentences } from './find-similar-sentences';
 import { generateQuery } from './generate-query';
-
+import { chunk } from './utils';
 interface BlogPost {
   title: string;
   summary: string;
@@ -51,39 +51,37 @@ async function research(topic: string): Promise<BlogPost> {
   const allResults = await Promise.all(queries.map(searchGoogle));
   const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
 
-  const contents = await Promise.all(
-    Array.from(uniqueUrls).map(parseWeb)
-  );
+  const contents = await Promise.all(Array.from(uniqueUrls).map(parseWeb));
 
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('Analyzing relevance...'));
-  const allSentences = contents.flatMap(content => {
+  const allSentences = contents.flatMap((content) => {
     return content.chunks
-      .filter(s => s.trim().length > 50) // Filter out short chunks
-      .map(chunk => ({
+      .filter((s) => s.trim().length > 50) // Filter out short chunks
+      .map((chunk) => ({
         text: chunk,
         source: {
           url: content.url,
           title: content.title,
-          hostname: content.hostname
-        }
+          hostname: content.hostname,
+        },
       }));
   });
 
-  const sentences = allSentences.map(s => s.text);
+  const sentences = allSentences.map((s) => s.text);
 
   const topSentenceIndices = await findSimilarSentences(topic, sentences, {
     topK: 10,
   });
   // Get the most relevant content with their sources
-  const relevantContent = topSentenceIndices.map(i => allSentences[i]);
-  const mostRelevantContent = relevantContent.map(c => c.text).join('\n\n');
-  
+  const relevantContent = topSentenceIndices.map((i) => allSentences[i]);
+  const mostRelevantContent = relevantContent.map((c) => c.text).join('\n\n');
+
   // Track which sources were used
   const usedSources = new Set<string>();
   const contentSources = relevantContent
-    .map(c => c.source)
-    .filter(source => {
+    .map((c) => c.source)
+    .filter((source) => {
       if (!source.url || usedSources.has(source.url)) return false;
       usedSources.add(source.url);
       return true;
