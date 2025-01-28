@@ -3,6 +3,7 @@ import { openai } from '@ai-sdk/openai';
 import { JSDOM } from 'jsdom';
 import fetch from 'node-fetch';
 import kleur from 'kleur';
+import 'dotenv/config';
 
 interface BlogPost {
   title: string;
@@ -207,7 +208,13 @@ async function research(topic: string): Promise<BlogPost> {
         2. Technical accuracy
         3. Engaging style
         4. Actionable insights
-        Return the improved version.`,
+        Return the improved version with this JSON structure:
+        {
+          "title": "string",
+          "summary": "string",
+          "sections": [{"title": "string", "content": "string"}],
+          "conclusion": "string"
+        }`,
       },
       {
         role: 'user',
@@ -220,22 +227,32 @@ async function research(topic: string): Promise<BlogPost> {
 
   console.log(kleur.green('✓ Blog post generated!'));
 
+  const improved = JSON.parse(improvedContent);
   return {
-    title: outline.title,
-    summary,
-    sections,
-    conclusion,
+    title: improved.title,
+    summary: improved.summary,
+    sections: improved.sections.map(s => ({
+      ...s,
+      sources: contents.map(c => c.url)
+    })),
+    conclusion: improved.conclusion
   };
 }
 
 // CLI interface
 if (require.main === module) {
-  const topic = process.argv[2];
-  if (!topic) {
-    console.error('Please provide a topic');
+  if (!process.env.SERPER_API_KEY) {
+    console.error(kleur.red('Error: SERPER_API_KEY environment variable is required'));
     process.exit(1);
   }
 
+  const topic = process.argv[2];
+  if (!topic) {
+    console.error(kleur.yellow('Usage: node research.js "your topic here"'));
+    process.exit(1);
+  }
+
+  console.log(kleur.dim('Starting research...'));
   research(topic)
     .then((blogPost) => {
       // Print the blog post
