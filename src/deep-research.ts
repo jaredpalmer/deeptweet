@@ -8,28 +8,60 @@ import PQueue from 'p-queue';
 import Table from 'cli-table3';
 import readline from 'readline';
 
+interface Event {
+  type: EventType;
+  message: string;
+  timestamp: number;
+  data: Record<string, any>;
+}
+
+interface State {
+  events: Event[];
+  topics: Set<string>;
+  insights: Insight[];
+  currentTasks: Map<string, string>;
+  tweetThread: string | null;
+  startTime: number | null;
+  isComplete: boolean;
+}
+
+interface SearchResult {
+  link: string;
+  title?: string;
+  snippet?: string;
+}
+
+interface Insight {
+  topic: string;
+  summary: string;
+  score: number;
+  url: string;
+}
+
+type TaskId = string;
+
 // State management
-const state = {
+const state: State = {
   events: [],
-  topics: new Set(),
+  topics: new Set<string>(),
   insights: [],
-  currentTasks: new Map(),
+  currentTasks: new Map<string, string>(),
   tweetThread: null,
   startTime: null,
-  isComplete: false,
+  isComplete: false
 };
 
-const EventType = {
-  INFO: 'info',
-  SUCCESS: 'success',
-  ERROR: 'error',
-  TASK_START: 'task_start',
-  TASK_END: 'task_end',
-  INSIGHT_ADDED: 'insight_added',
-  TOPIC_ADDED: 'topic_added',
-};
+enum EventType {
+  INFO = 'info',
+  SUCCESS = 'success',
+  ERROR = 'error',
+  TASK_START = 'task_start',
+  TASK_END = 'task_end',
+  INSIGHT_ADDED = 'insight_added',
+  TOPIC_ADDED = 'topic_added'
+}
 
-function addEvent(type, message, data = {}) {
+function addEvent(type: EventType, message: string, data: Record<string, any> = {}) {
   state.events.push({
     type,
     message,
@@ -104,44 +136,46 @@ function render() {
 
 // Logger class to manage state events
 class Logger {
+  private taskId: number;
+
   constructor() {
     this.taskId = 0;
   }
 
-  startTask(message) {
+  startTask(message: string): TaskId {
     const id = `task-${++this.taskId}`;
     state.currentTasks.set(id, message);
     addEvent(EventType.TASK_START, message);
     return id;
   }
 
-  endTask(id, message) {
+  endTask(id: TaskId, message: string): void {
     state.currentTasks.delete(id);
     addEvent(EventType.TASK_END, message);
   }
 
-  log(message) {
+  log(message: string): void {
     addEvent(EventType.INFO, message);
   }
 
-  success(message) {
+  success(message: string): void {
     addEvent(EventType.SUCCESS, message);
   }
 
-  error(message) {
+  error(message: string): void {
     addEvent(EventType.ERROR, message);
   }
 
-  info(message) {
+  info(message: string): void {
     addEvent(EventType.INFO, message);
   }
 
-  addInsight(insight) {
+  addInsight(insight: Insight): void {
     state.insights.push(insight);
     addEvent(EventType.INSIGHT_ADDED, `New insight for ${insight.topic}`);
   }
 
-  addTopic(topic) {
+  addTopic(topic: string): void {
     state.topics.add(topic);
     addEvent(EventType.TOPIC_ADDED, `New topic: ${topic}`);
   }
