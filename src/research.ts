@@ -22,6 +22,50 @@ interface SearchResult {
   snippet: string;
 }
 
+const MAX_N_PAGES_SCRAPE = 10;
+const MAX_N_PAGES_EMBED = 5;
+const MAX_N_CHUNKS = 100;
+const CHUNK_CHAR_LENGTH = 400;
+const DOMAIN_BLOCKLIST = [
+  'youtube.com',
+  'facebook.com',
+  'twitter.com',
+  'instagram.com',
+];
+
+async function parseWeb(url: string): Promise<string[]> {
+  const abortController = new AbortController();
+  setTimeout(() => abortController.abort(), 10000);
+  const htmlString = await fetch(url, { signal: abortController.signal })
+    .then((response) => response.text())
+    .catch(() => null);
+
+  if (!htmlString) return [];
+
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on('error', () => {
+    // No-op to skip console errors.
+  });
+
+  // put the html string into a DOM
+  const dom = new JSDOM(htmlString, {
+    virtualConsole,
+  });
+
+  const { document } = dom.window;
+  const textElTags = 'p';
+  const paragraphs = document.querySelectorAll(textElTags);
+  if (!paragraphs.length) {
+    throw new Error(`webpage doesn't have any "${textElTags}" element`);
+  }
+  const paragraphTexts = Array.from(paragraphs).map((p) => p.textContent);
+
+  // combine text contents from paragraphs and then remove newlines and multiple spaces
+  const text = paragraphTexts.join(' ').replace(/ {2}|\r\n|\n|\r/gm, '');
+
+  return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
+}
+
 async function searchGoogle(query: string): Promise<SearchResult[]> {
   if (!process.env.SERPER_API_KEY) {
     throw new Error('SERPER_API_KEY environment variable is required');
@@ -33,11 +77,28 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
       'X-API-KEY': process.env.SERPER_API_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ q: query, num: 3 }), // Only get top 3 results
+    body: JSON.stringify({
+      q: query,
+      num: 5, // Get top 5 results
+    }),
   });
 
-  const data = await response.json();
-  return data.organic || [];
+  const data = (await response.json()) as { organic?: SearchResult[] };
+  const results = (data.organic || []).map((result) => {
+    try {
+      const { hostname } = new URL(result.link);
+      return { ...result, hostname };
+    } catch {
+      return result;
+    }
+  });
+
+  return results
+    .filter(
+      (result) =>
+        !DOMAIN_BLOCKLIST.some((domain) => result.hostname?.includes(domain))
+    )
+    .slice(0, MAX_N_PAGES_SCRAPE);
 }
 
 async function extractContent(url: string): Promise<string> {
@@ -231,64 +292,63 @@ async function research(topic: string): Promise<BlogPost> {
   return {
     title: improved.title,
     summary: improved.summary,
-    sections: improved.sections.map(s => ({
+    sections: improved.sections.map((s) => ({
       ...s,
-      sources: contents.map(c => c.url)
+      sources: contents.map((c) => c.url),
     })),
-    conclusion: improved.conclusion
+    conclusion: improved.conclusion,
   };
 }
 
 // CLI interface
-if (require.main === module) {
-  if (!process.env.SERPER_API_KEY) {
-    console.error(kleur.red('Error: SERPER_API_KEY environment variable is required'));
-    process.exit(1);
-  }
 
-  const topic = process.argv[2];
-  if (!topic) {
-    console.error(kleur.yellow('Usage: node research.js "your topic here"'));
-    process.exit(1);
-  }
-
-  console.log(kleur.dim('Starting research...'));
-  research(topic)
-    .then((blogPost) => {
-      // Print the blog post
-      console.log('\n' + kleur.bold().cyan('╭─────────────────────╮'));
-      console.log(kleur.bold().cyan('│     Blog Post      │'));
-      console.log(kleur.bold().cyan('╰─────────────────────╯\n'));
-
-      console.log(kleur.bold().blue(blogPost.title));
-      console.log(kleur.dim('═'.repeat(blogPost.title.length)) + '\n');
-
-      console.log(kleur.bold('Summary'));
-      console.log(kleur.dim('─'.repeat(40)));
-      console.log(blogPost.summary + '\n');
-
-      for (const section of blogPost.sections) {
-        console.log(kleur.bold(section.title));
-        console.log(kleur.dim('─'.repeat(40)));
-        console.log(section.content + '\n');
-
-        if (section.sources.length) {
-          console.log(kleur.dim('Sources:'));
-          section.sources.forEach((url) => {
-            console.log(kleur.dim(`• ${url}`));
-          });
-          console.log();
-        }
-      }
-
-      console.log(kleur.bold('Conclusion'));
-      console.log(kleur.dim('─'.repeat(40)));
-      console.log(blogPost.conclusion);
-    })
-    .catch((error) => {
-      console.error('Error:', error);
-      process.exit(1);
-    });
+if (!process.env.SERPER_API_KEY) {
+  console.error(
+    kleur.red('Error: SERPER_API_KEY environment variable is required')
+  );
+  process.exit(1);
 }
 
-export { research };
+const topic = process.argv[2];
+if (!topic) {
+  console.error(kleur.yellow('Usage: node research.js "your topic here"'));
+  process.exit(1);
+}
+
+console.log(kleur.dim('Starting research...'));
+research(topic)
+  .then((blogPost) => {
+    // Print the blog post
+    console.log('\n' + kleur.bold().cyan('╭─────────────────────╮'));
+    console.log(kleur.bold().cyan('│     Blog Post      │'));
+    console.log(kleur.bold().cyan('╰─────────────────────╯\n'));
+
+    console.log(kleur.bold().blue(blogPost.title));
+    console.log(kleur.dim('═'.repeat(blogPost.title.length)) + '\n');
+
+    console.log(kleur.bold('Summary'));
+    console.log(kleur.dim('─'.repeat(40)));
+    console.log(blogPost.summary + '\n');
+
+    for (const section of blogPost.sections) {
+      console.log(kleur.bold(section.title));
+      console.log(kleur.dim('─'.repeat(40)));
+      console.log(section.content + '\n');
+
+      if (section.sources.length) {
+        console.log(kleur.dim('Sources:'));
+        section.sources.forEach((url) => {
+          console.log(kleur.dim(`• ${url}`));
+        });
+        console.log();
+      }
+    }
+
+    console.log(kleur.bold('Conclusion'));
+    console.log(kleur.dim('─'.repeat(40)));
+    console.log(blogPost.conclusion);
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+    process.exit(1);
+  });
