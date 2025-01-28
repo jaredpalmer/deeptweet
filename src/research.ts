@@ -3,6 +3,7 @@ import { outlineSchema, blogPostSchema } from './schemas';
 import { openai } from '@ai-sdk/openai';
 import kleur from 'kleur';
 import 'dotenv/config';
+import { writeBlogPostMarkdown } from './utils/markdown';
 import { parseWeb } from './web/scrape';
 import { searchGoogle } from './web/search';
 import { findSimilarSentences } from './find-similar-sentences';
@@ -236,7 +237,11 @@ if (!topic) {
 
 console.log(kleur.dim('Starting research...'));
 research(topic)
-  .then((blogPost) => {
+  .then(async (blogPost) => {
+    // Write markdown file
+    const outputPath = await writeBlogPostMarkdown(blogPost, topic);
+    console.log(kleur.green(`\n✓ Blog post written to: ${outputPath}\n`));
+
     // Print the blog post
     console.log('\n' + kleur.bold().cyan('╭─────────────────────╮'));
     console.log(kleur.bold().cyan('│     Blog Post      │'));
