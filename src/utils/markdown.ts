@@ -3,7 +3,7 @@ import path from 'path';
 import { BlogPost } from '../schemas';
 import { sanitizeFilename } from './filename';
 
-export async function writeBlogPostMarkdown(blogPost: BlogPost, topic: string) {
+export async function writeBlogPostMarkdown(blogPost: BlogPost, topic: string, customPath?: string) {
   const timestamp = new Date().toISOString().split('T')[0];
   const filename = sanitizeFilename(`${timestamp}-${topic}`);
   const outputDir = path.join(process.cwd(), 'output');
@@ -11,6 +11,7 @@ export async function writeBlogPostMarkdown(blogPost: BlogPost, topic: string) {
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
   
+  const outputPath = customPath || path.join(outputDir, `${filename}.md`);
   const markdown = `# ${blogPost.title}
 
 ${blogPost.subtitle}
@@ -50,7 +51,6 @@ ${blogPost.references.map((ref, idx) =>
 ).join('\n')}
 `;
 
-  const outputPath = path.join(outputDir, `${filename}.md`);
   await fs.writeFile(outputPath, markdown, 'utf-8');
   return outputPath;
 }

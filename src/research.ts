@@ -2,6 +2,7 @@ import { generateText, generateObject } from 'ai';
 import { outlineSchema, blogPostSchema } from './schemas';
 import { openai } from '@ai-sdk/openai';
 import kleur from 'kleur';
+import path from 'path';
 import 'dotenv/config';
 import { writeBlogPostMarkdown } from './utils/markdown';
 import { parseWeb } from './web/scrape';
@@ -108,6 +109,11 @@ async function research(topic: string): Promise<BlogPost> {
     .map(source => source.url)
     .filter(Boolean);
 
+  // Write initial content to file
+  const initialContentPath = path.join('output', `${sanitizeFilename(topic)}-1-initial-content.md`);
+  await fs.writeFile(initialContentPath, mostRelevantContent, 'utf-8');
+  console.log(kleur.dim(`Wrote initial content to ${initialContentPath}`));
+
   // Show summary of findings
   console.log(kleur.dim('\nContent Analysis Summary:'));
   console.log(kleur.dim('• ') + `${relevantContent.length} most relevant passages selected`);
@@ -141,6 +147,11 @@ async function research(topic: string): Promise<BlogPost> {
   });
 
   process.stdout.write(kleur.green('✓\n'));
+
+  // Write outline to file
+  const outlinePath = path.join('output', `${sanitizeFilename(topic)}-2-outline.md`);
+  await fs.writeFile(outlinePath, JSON.stringify(outline, null, 2), 'utf-8');
+  console.log(kleur.dim(`Wrote outline to ${outlinePath}`));
 
   // Step 4: Generate each section
   process.stdout.write(kleur.dim('Writing sections... '));
@@ -269,6 +280,11 @@ async function research(topic: string): Promise<BlogPost> {
 
   process.stdout.write(`\r${kleur.dim('Initial polish complete!'.padEnd(40))}${kleur.green('✓\n')}`);
 
+  // Write improved version to file
+  const improvedPath = path.join('output', `${sanitizeFilename(topic)}-3-improved.md`);
+  await writeBlogPostMarkdown(improved, topic, improvedPath);
+  console.log(kleur.dim(`Wrote improved version to ${improvedPath}`));
+
   // Step 7: Expert Review & Improvements
   console.log(kleur.dim('\nPhase 5: Expert Review'));
   console.log(kleur.dim('─'.repeat(30)));
@@ -351,6 +367,11 @@ Keep all technical content and citations intact.`,
   });
 
   process.stdout.write(kleur.green('✓\n'));
+
+  // Write expert improved version to file
+  const expertPath = path.join('output', `${sanitizeFilename(topic)}-4-expert-improved.md`);
+  await writeBlogPostMarkdown(expertImproved, topic, expertPath);
+  console.log(kleur.dim(`Wrote expert improved version to ${expertPath}`));
   
   console.log(kleur.bold().green('\n✨ Blog Post Generated Successfully! ✨'));
   console.log(kleur.dim('═'.repeat(50)));
