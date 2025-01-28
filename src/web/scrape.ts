@@ -78,10 +78,10 @@ export async function parseWeb(url: string): Promise<WebContent> {
 
   // Create semantic chunks with overlap
   const chunks = chunkText(text, {
-    chunkSize: 500,    // Slightly larger chunks
-    overlap: 100,      // 100 char overlap between chunks
-    minLength: 50,     // Min length for meaningful chunks
-    maxChunks: 100     // Limit total chunks
+    chunkSize: 2000,   // Much larger chunks to capture more context
+    overlap: 200,      // Larger overlap to maintain coherence
+    minLength: 100,    // Increased min length for more meaningful chunks
+    maxChunks: 50      // Fewer but larger chunks
   });
   
   try {

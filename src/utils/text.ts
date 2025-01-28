@@ -8,10 +8,10 @@ export interface ChunkOptions {
 }
 
 const DEFAULT_OPTIONS: Required<ChunkOptions> = {
-  maxChunks: 100,
-  chunkSize: 400,
-  minLength: 50,
-  overlap: 100,
+  maxChunks: 50,      // Fewer chunks overall
+  chunkSize: 2000,    // Much larger chunks
+  minLength: 100,     // Longer minimum length
+  overlap: 200,       // More overlap between chunks
 };
 
 export function chunkText(text: string, options: ChunkOptions = {}): string[] {
