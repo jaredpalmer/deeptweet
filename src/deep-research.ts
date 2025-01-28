@@ -597,8 +597,8 @@ async function generateSections(
     sectionQueue.add(() => generateSection(line, index))
   );
 
-  const completedSections = await Promise.all(sectionPromises);
-  sections.push(...completedSections);
+  const completedSections = await Promise.all<Section>(sectionPromises);
+  sections.push(...(completedSections as Section[]));
 
   return sections;
 }
