@@ -421,7 +421,7 @@ async function generateResearchPaper(
 ): Promise<ResearchPaper> {
   const MAX_IMPROVEMENT_ITERATIONS = 2;
   logger.info('📝 Generating paper outline...');
-  
+
   // Generate outline, abstract, and introduction in parallel
   const [outlineResult, abstractResult] = await Promise.all([
     generateText({
@@ -429,11 +429,14 @@ async function generateResearchPaper(
       messages: [
         {
           role: 'system',
-          content: 'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
+          content:
+            'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
         },
         {
           role: 'user',
-          content: `Topic: ${topic}\n\nKey insights:\n${insights.map((i) => `- ${i.summary}`).join('\n')}`,
+          content: `Topic: ${topic}\n\nKey insights:\n${insights
+            .map((i) => `- ${i.summary}`)
+            .join('\n')}`,
         },
       ],
     }),
@@ -442,14 +445,17 @@ async function generateResearchPaper(
       messages: [
         {
           role: 'system',
-          content: 'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
+          content:
+            'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
         },
         {
           role: 'user',
-          content: `Topic: ${topic}\n\nKey insights:\n${insights.map((i) => `- ${i.summary}`).join('\n')}`,
+          content: `Topic: ${topic}\n\nKey insights:\n${insights
+            .map((i) => `- ${i.summary}`)
+            .join('\n')}`,
         },
       ],
-    })
+    }),
   ]);
 
   const outlineText = outlineResult.text;
@@ -461,7 +467,8 @@ async function generateResearchPaper(
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
+        content:
+          'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
       },
       {
         role: 'user',
@@ -471,7 +478,12 @@ async function generateResearchPaper(
   });
 
   logger.info('📝 Generating paper sections...');
-  const sections = await generateSections(outlineText, insights, sources, logger);
+  const sections = await generateSections(
+    outlineText,
+    insights,
+    sources,
+    logger
+  );
 
   logger.info('📝 Generating conclusion...');
   const { text: conclusion } = await generateText({
@@ -479,11 +491,14 @@ async function generateResearchPaper(
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
+        content:
+          'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
       },
       {
         role: 'user',
-        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections.map((s) => s.title).join('\n')}`,
+        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections
+          .map((s) => s.title)
+          .join('\n')}`,
       },
     ],
   });
@@ -501,19 +516,21 @@ async function generateResearchPaper(
   // Iterative improvement process
   let currentPaper = initialPaper;
   for (let i = 0; i < MAX_IMPROVEMENT_ITERATIONS; i++) {
-    logger.info(`📋 Running critique iteration ${i + 1}/${MAX_IMPROVEMENT_ITERATIONS}...`);
-    
+    logger.info(
+      `📋 Running critique iteration ${i + 1}/${MAX_IMPROVEMENT_ITERATIONS}...`
+    );
+
     // Critique current version
     const paperContent = [
       currentPaper.abstract,
       currentPaper.introduction,
-      ...currentPaper.sections.map(s => s.content),
-      currentPaper.conclusion
+      ...currentPaper.sections.map((s) => s.content),
+      currentPaper.conclusion,
     ].join('\n\n');
-    
+
     const critique = await critiquePaper(paperContent);
     logger.info(`📊 Paper quality score: ${critique.score}/10`);
-    
+
     if (critique.score >= 8) {
       logger.success('✨ Paper meets quality threshold');
       break;
@@ -521,16 +538,17 @@ async function generateResearchPaper(
 
     // Improve sections based on critique
     logger.info('📝 Implementing improvements...');
-    const [improvedAbstract, improvedIntro, improvedConclusion] = await Promise.all([
-      improveSection(currentPaper.abstract, critique),
-      improveSection(currentPaper.introduction, critique),
-      improveSection(currentPaper.conclusion, critique)
-    ]);
+    const [improvedAbstract, improvedIntro, improvedConclusion] =
+      await Promise.all([
+        improveSection(currentPaper.abstract, critique),
+        improveSection(currentPaper.introduction, critique),
+        improveSection(currentPaper.conclusion, critique),
+      ]);
 
     const improvedSections = await Promise.all(
-      currentPaper.sections.map(async section => ({
+      currentPaper.sections.map(async (section) => ({
         ...section,
-        content: await improveSection(section.content, critique)
+        content: await improveSection(section.content, critique),
       }))
     );
 
@@ -539,7 +557,7 @@ async function generateResearchPaper(
       abstract: improvedAbstract,
       introduction: improvedIntro,
       sections: improvedSections,
-      conclusion: improvedConclusion
+      conclusion: improvedConclusion,
     };
   }
 
@@ -555,22 +573,30 @@ async function generateSections(
 ): Promise<Section[]> {
   const sections: Section[] = [];
   const outlineLines = outline.split('\n').filter(Boolean);
-  const mainSections = outlineLines.filter(line => !line.startsWith('  '));
-  
+  const mainSections = outlineLines.filter((line) => !line.startsWith('  '));
+
   logger.info(`📑 Processing ${mainSections.length} main sections...`);
-  
+
   // Process sections in parallel with a concurrency limit
   const sectionQueue = new PQueue({ concurrency: 2 });
-  
-  const generateSection = async (line: string, index: number): Promise<Section> => {
-    logger.info(`📄 Generating section ${index + 1}/${mainSections.length}: ${line.replace(/^\d+\.\s*/, '')}`);
-    
+
+  const generateSection = async (
+    line: string,
+    index: number
+  ): Promise<Section> => {
+    logger.info(
+      `📄 Generating section ${index + 1}/${
+        mainSections.length
+      }: ${line.replace(/^\d+\.\s*/, '')}`
+    );
+
     const { text: sectionContent } = await generateText({
       model: openai('gpt-4o-mini'),
       messages: [
         {
           role: 'system',
-          content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
+          content:
+            'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
         },
         {
           role: 'user',
@@ -593,12 +619,12 @@ async function generateSections(
     return section;
   };
 
-  const sectionPromises: Promise<Section>[] = mainSections.map((line, index) => 
+  const sectionPromises = mainSections.map((line, index) =>
     sectionQueue.add(() => generateSection(line, index))
-  );
+  ) as Promise<Section>[];
 
   const completedSections = await Promise.all(sectionPromises);
-  sections.push(...completedSections);
+  sections.push(...completedSections.filter(Boolean));
 
   return sections;
 }
@@ -729,10 +755,17 @@ async function researchTopic(
     }));
 
     logger.info('📝 Generating research paper...');
-    const paper = await generateResearchPaper(topic, researchInsights, sources, logger);
+    const paper = await generateResearchPaper(
+      topic,
+      researchInsights,
+      sources,
+      logger
+    );
 
     // Display paper with better formatting
-    console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
+    console.log(
+      '\n' + kleur.bold().cyan('╭─────────────────────────────────╮')
+    );
     console.log(kleur.bold().cyan('│         Research Paper            │'));
     console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
 
@@ -758,10 +791,10 @@ async function researchTopic(
       console.log(kleur.bold().yellow(section.title));
       console.log(kleur.dim('─'.repeat(40)));
       console.log(section.content);
-      
+
       if (section.sources.length > 0) {
         console.log(kleur.dim('\nSection Sources:'));
-        section.sources.forEach(source => {
+        section.sources.forEach((source) => {
           console.log(kleur.dim(`• ${source.url}`));
         });
       }
