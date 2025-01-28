@@ -48,35 +48,21 @@ const DOMAIN_BLOCKLIST = [
   'instagram.com',
 ];
 
-interface Source {
-  url: string;
-  title?: string;
-  content: string;
-  relevance: number;
-}
-
-interface Section {
+interface BlogPost {
   title: string;
   content: string;
-  sources: Source[];
-  subsections?: Section[];
+  source: string;
+  businessValue: string;
+  technicalInsights: string[];
 }
 
-interface ResearchPaper {
-  title: string;
-  abstract: string;
-  introduction: string;
-  sections: Section[];
-  conclusion: string;
-  references: Source[];
-}
-
-interface Insight {
-  topic: string;
-  summary: string;
-  score: number;
+interface ContentContext {
   url: string;
-  source?: Source;
+  content: string;
+  businessValue: string;
+  technicalInsights: string[];
+  marketContext: string[];
+  relevanceScore: number;
 }
 
 type TaskId = string;
