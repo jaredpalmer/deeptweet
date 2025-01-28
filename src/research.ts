@@ -242,7 +242,11 @@ async function research(topic: string): Promise<BlogPost> {
   process.stdout.write(kleur.dim('Starting initial polish... '));
 
   // Break down the content for more manageable processing
-  const contentParts = [
+  type ContentPart = 
+    | { type: 'section'; title: string; content: string }
+    | { type: 'title' | 'summary' | 'conclusion'; content: string };
+
+  const contentParts: ContentPart[] = [
     { type: 'title', content: outline.title },
     { type: 'summary', content: summary },
     ...sections.map((s) => ({
