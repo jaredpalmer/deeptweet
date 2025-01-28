@@ -87,6 +87,11 @@ async function research(topic: string): Promise<BlogPost> {
       return true;
     });
 
+  // Get formatted source list for citations
+  const sourceList = contentSources
+    .map(source => source.url)
+    .filter(Boolean);
+
   // Step 3: Generate blog post outline
   console.log(kleur.dim('Creating outline...'));
   const { object: outline } = await generateObject({
@@ -127,7 +132,7 @@ async function research(topic: string): Promise<BlogPost> {
       return {
         title: section.title,
         content,
-        sources: contents.map((c) => c.url),
+        sources: sourceList,
       };
     })
   );
@@ -193,7 +198,7 @@ async function research(topic: string): Promise<BlogPost> {
     summary: improved.summary,
     sections: improved.sections.map((s) => ({
       ...s,
-      sources: contents.map((c) => c.url),
+      sources: sourceList,
     })),
     conclusion: improved.conclusion,
   };
