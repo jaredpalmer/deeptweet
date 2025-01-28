@@ -13,18 +13,25 @@ import { chunk } from './utils';
 import { BlogPost } from './schemas';
 import { researchAgents } from './agents';
 import fs from 'fs/promises';
+import { sanitizeFilename } from './utils/filename';
 
 const MAX_N_PAGES_EMBED = 5;
 
 async function research(topic: string): Promise<BlogPost> {
-  console.log(kleur.bold().blue('\n🔍 Starting Research: ') + kleur.bold(topic));
+  console.log(
+    kleur.bold().blue('\n🔍 Starting Research: ') + kleur.bold(topic)
+  );
   console.log(kleur.dim('═'.repeat(50)));
 
   // Step 1: Generate optimized search queries
   const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   let i = 0;
   const spinnerInterval = setInterval(() => {
-    process.stdout.write(`\r${kleur.cyan(spinner[i++ % spinner.length])} Generating search queries...`);
+    process.stdout.write(
+      `\r${kleur.cyan(
+        spinner[i++ % spinner.length]
+      )} Generating search queries...`
+    );
   }, 80);
 
   // Generate multiple search queries for different aspects
@@ -64,7 +71,7 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('\nPhase 2: Content Analysis'));
   console.log(kleur.dim('─'.repeat(30)));
-  
+
   // Process chunks
   process.stdout.write(kleur.dim('Processing content chunks... '));
   const allSentences = contents.flatMap((content) => {
@@ -105,26 +112,34 @@ async function research(topic: string): Promise<BlogPost> {
     });
 
   // Get formatted source list for citations
-  const sourceList = contentSources
-    .map(source => source.url)
-    .filter(Boolean);
+  const sourceList = contentSources.map((source) => source.url).filter(Boolean);
 
   // Write initial content to file
-  const initialContentPath = path.join('output', `${sanitizeFilename(topic)}-1-initial-content.md`);
+  const initialContentPath = path.join(
+    'output',
+    `${sanitizeFilename(topic)}-1-initial-content.md`
+  );
   await fs.writeFile(initialContentPath, mostRelevantContent, 'utf-8');
   console.log(kleur.dim(`Wrote initial content to ${initialContentPath}`));
 
   // Show summary of findings
   console.log(kleur.dim('\nContent Analysis Summary:'));
-  console.log(kleur.dim('• ') + `${relevantContent.length} most relevant passages selected`);
-  console.log(kleur.dim('• ') + `${sourceList.length} unique sources identified`);
-  
+  console.log(
+    kleur.dim('• ') +
+      `${relevantContent.length} most relevant passages selected`
+  );
+  console.log(
+    kleur.dim('• ') + `${sourceList.length} unique sources identified`
+  );
+
   // Show a preview of top content (first 100 chars of first 2 passages)
   console.log(kleur.dim('\nTop Passages Preview:'));
   relevantContent.slice(0, 2).forEach((content, i) => {
     const preview = content.text.slice(0, 100).trim() + '...';
     console.log(kleur.dim(`${i + 1}. `) + preview);
-    console.log(kleur.dim(`   Source: ${content.source.hostname || 'unknown'}\n`));
+    console.log(
+      kleur.dim(`   Source: ${content.source.hostname || 'unknown'}\n`)
+    );
   });
 
   // Step 3: Generate blog post outline
@@ -149,7 +164,10 @@ async function research(topic: string): Promise<BlogPost> {
   process.stdout.write(kleur.green('✓\n'));
 
   // Write outline to file
-  const outlinePath = path.join('output', `${sanitizeFilename(topic)}-2-outline.md`);
+  const outlinePath = path.join(
+    'output',
+    `${sanitizeFilename(topic)}-2-outline.md`
+  );
   await fs.writeFile(outlinePath, JSON.stringify(outline, null, 2), 'utf-8');
   console.log(kleur.dim(`Wrote outline to ${outlinePath}`));
 
@@ -220,22 +238,28 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 6: Quality Improvement
   console.log(kleur.dim('\nPhase 4: Quality Enhancement'));
   console.log(kleur.dim('─'.repeat(30)));
-  
+
   process.stdout.write(kleur.dim('Starting initial polish... '));
-  
+
   // Break down the content for more manageable processing
   const contentParts = [
     { type: 'title', content: outline.title },
     { type: 'summary', content: summary },
-    ...sections.map(s => ({ type: 'section', title: s.title, content: s.content })),
-    { type: 'conclusion', content: conclusion }
+    ...sections.map((s) => ({
+      type: 'section',
+      title: s.title,
+      content: s.content,
+    })),
+    { type: 'conclusion', content: conclusion },
   ];
 
   // Process each part with progress updates
   const improvedParts: any[] = [];
   for (const part of contentParts) {
-    process.stdout.write(`\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`);
-    
+    process.stdout.write(
+      `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
+    );
+
     const { object: improvedPart } = await generateObject({
       model: openai('gpt-4o-mini'),
       schema: blogPostSchema,
@@ -251,25 +275,33 @@ async function research(topic: string): Promise<BlogPost> {
         },
         {
           role: 'user',
-          content: part.type === 'section' 
-            ? `${part.title}\n\n${part.content}\n\nAvailable sources:\n${sourceList.join('\n')}`
-            : `${part.content}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+          content:
+            part.type === 'section'
+              ? `${part.title}\n\n${
+                  part.content
+                }\n\nAvailable sources:\n${sourceList.join('\n')}`
+              : `${part.content}\n\nAvailable sources:\n${sourceList.join(
+                  '\n'
+                )}`,
         },
       ],
     });
-    
+
     improvedParts.push(improvedPart);
   }
 
   // Combine improved parts
-  process.stdout.write(`\r${kleur.dim('Combining improved content...'.padEnd(40))}`);
+  process.stdout.write(
+    `\r${kleur.dim('Combining improved content...'.padEnd(40))}`
+  );
   const { object: improved } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
     messages: [
       {
         role: 'system',
-        content: 'Combine these improved sections into a cohesive blog post, maintaining all improvements and citations.',
+        content:
+          'Combine these improved sections into a cohesive blog post, maintaining all improvements and citations.',
       },
       {
         role: 'user',
@@ -278,25 +310,30 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
-  process.stdout.write(`\r${kleur.dim('Initial polish complete!'.padEnd(40))}${kleur.green('✓\n')}`);
+  process.stdout.write(
+    `\r${kleur.dim('Initial polish complete!'.padEnd(40))}${kleur.green('✓\n')}`
+  );
 
   // Write improved version to file
-  const improvedPath = path.join('output', `${sanitizeFilename(topic)}-3-improved.md`);
+  const improvedPath = path.join(
+    'output',
+    `${sanitizeFilename(topic)}-3-improved.md`
+  );
   await writeBlogPostMarkdown(improved, topic, improvedPath);
   console.log(kleur.dim(`Wrote improved version to ${improvedPath}`));
 
   // Step 7: Expert Review & Improvements
   console.log(kleur.dim('\nPhase 5: Expert Review'));
   console.log(kleur.dim('─'.repeat(30)));
-  
+
   const agentAnalyses = await Promise.all(
-    researchAgents.map(async agent => {
+    researchAgents.map(async (agent) => {
       process.stdout.write(kleur.dim(`${agent.name}... `));
       process.stdout.write(kleur.green('✓ '));
       const feedback = await agent.analyze(JSON.stringify(improved));
       return {
         agent: agent.name,
-        feedback
+        feedback,
       };
     })
   );
@@ -311,14 +348,15 @@ async function research(topic: string): Promise<BlogPost> {
 1. Business value improvements suggested by BusinessValueAnalyst
 2. Technical accuracy issues found by FactChecker
 3. Areas needing more depth from DepthAnalyst
-4. Narrative improvements from Synthesizer`
+4. Narrative improvements from Synthesizer`,
       },
       {
         role: 'user',
-        content: `Expert feedback:\n${agentAnalyses.map(a => 
-          `${a.agent}:\n${a.feedback}\n`).join('\n')}`
-      }
-    ]
+        content: `Expert feedback:\n${agentAnalyses
+          .map((a) => `${a.agent}:\n${a.feedback}\n`)
+          .join('\n')}`,
+      },
+    ],
   });
 
   // Apply improvements based on agent feedback
@@ -334,13 +372,15 @@ async function research(topic: string): Promise<BlogPost> {
 2. Fix any technical inaccuracies
 3. Add depth where recommended
 4. Improve narrative flow and connections
-Keep all citations and maintain the overall structure.`
+Keep all citations and maintain the overall structure.`,
       },
       {
         role: 'user',
-        content: `Original post:\n${JSON.stringify(improved)}\n\nExpert feedback:\n${consolidatedFeedback}`
-      }
-    ]
+        content: `Original post:\n${JSON.stringify(
+          improved
+        )}\n\nExpert feedback:\n${consolidatedFeedback}`,
+      },
+    ],
   });
 
   console.log(kleur.dim('\nPhase 6: Final Polish'));
@@ -369,15 +409,18 @@ Keep all technical content and citations intact.`,
   process.stdout.write(kleur.green('✓\n'));
 
   // Write expert improved version to file
-  const expertPath = path.join('output', `${sanitizeFilename(topic)}-4-expert-improved.md`);
+  const expertPath = path.join(
+    'output',
+    `${sanitizeFilename(topic)}-4-expert-improved.md`
+  );
   await writeBlogPostMarkdown(expertImproved, topic, expertPath);
   console.log(kleur.dim(`Wrote expert improved version to ${expertPath}`));
-  
+
   console.log(kleur.bold().green('\n✨ Blog Post Generated Successfully! ✨'));
   console.log(kleur.dim('═'.repeat(50)));
   // Calculate reading time (rough estimate: 200 words per minute)
   const wordCount = improved.content
-    .map(block => block.text.split(/\s+/).length)
+    .map((block) => block.text.split(/\s+/).length)
     .reduce((a: number, b: number) => a + b, 0);
   const readingTime = Math.ceil(wordCount / 200);
 
@@ -388,13 +431,13 @@ Keep all technical content and citations intact.`,
     metadata: {
       reading_time: readingTime,
       technical_level: final.metadata.technical_level,
-      business_impact: final.metadata.business_impact
+      business_impact: final.metadata.business_impact,
     },
-    references: sourceList.map(url => ({
+    references: sourceList.map((url) => ({
       url,
-      title: "Reference",
-      site: new URL(url).hostname
-    }))
+      title: 'Reference',
+      site: new URL(url).hostname,
+    })),
   };
 }
 
@@ -441,7 +484,7 @@ research(topic)
         console.log(kleur.dim('─'.repeat(40)));
       } else {
         console.log(block.text + '\n');
-        
+
         if (block.citations?.length) {
           console.log(kleur.dim('Citations:'));
           block.citations.forEach(({ url }) => {
