@@ -20,6 +20,7 @@ interface State {
   }>;
   startTime: number | null;
   isComplete: boolean;
+  currentTasks: Map<string, string>;
 }
 
 interface BlogPost {
@@ -78,7 +79,6 @@ const state: State = {
   topics: new Set<string>(),
   insights: [],
   currentTasks: new Map<string, string>(),
-  tweetThread: null,
   startTime: null,
   isComplete: false,
 };
@@ -857,7 +857,7 @@ async function researchAndWrite(topic: string): Promise<BlogPost> {
     console.log();
 
     state.isComplete = true;
-    return { tweetThread: '', insights: researchInsights };
+    return { blogPost: paper, insights: researchInsights };
   }
 }
 
