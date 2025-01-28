@@ -1,10 +1,10 @@
 import { generateText, generateObject } from 'ai';
 import { outlineSchema, blogPostSchema } from './schemas';
 import { openai } from '@ai-sdk/openai';
-import { JSDOM, VirtualConsole } from 'jsdom';
-import fetch from 'node-fetch';
 import kleur from 'kleur';
 import 'dotenv/config';
+import { parseWeb } from './web/scrape';
+import { searchGoogle, SearchResult } from './web/search';
 
 interface BlogPost {
   title: string;
@@ -17,138 +17,8 @@ interface BlogPost {
   conclusion: string;
 }
 
-interface SearchResult {
-  title: string;
-  link: string;
-  snippet: string;
-}
-
-const MAX_N_PAGES_SCRAPE = 10;
 const MAX_N_PAGES_EMBED = 5;
-const MAX_N_CHUNKS = 100;
-const CHUNK_CHAR_LENGTH = 400;
-const DOMAIN_BLOCKLIST = [
-  'youtube.com',
-  'facebook.com',
-  'twitter.com',
-  'instagram.com',
-];
 
-async function parseWeb(url: string): Promise<string[]> {
-  const abortController = new AbortController();
-  setTimeout(() => abortController.abort(), 10000);
-  const htmlString = await fetch(url, { signal: abortController.signal })
-    .then((response) => response.text())
-    .catch(() => null);
-
-  if (!htmlString) return [];
-
-  const virtualConsole = new VirtualConsole();
-  virtualConsole.on('error', () => {
-    // No-op to skip console errors.
-  });
-
-  // put the html string into a DOM
-  const dom = new JSDOM(htmlString, {
-    virtualConsole,
-  });
-
-  const { document } = dom.window;
-  // Try multiple selectors to find text content
-  const selectors = [
-    'p',                           // Standard paragraphs
-    'article',                     // Article content
-    '.content',                    // Common content class
-    '[role="main"]',              // Main content area
-    'div > p',                    // Paragraphs in divs
-    '.post-content',              // Blog post content
-    'main',                       // Main content
-    'div:not(:empty)',           // Any non-empty div as fallback
-  ];
-
-  let textElements: Element[] = [];
-  
-  // Try each selector until we find content
-  for (const selector of selectors) {
-    textElements = Array.from(document.querySelectorAll(selector));
-    if (textElements.length > 0) break;
-  }
-
-  // If we still don't have content, try getting all text nodes
-  if (!textElements.length) {
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
-    
-    textElements = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.textContent?.trim()) {
-        textElements.push(node);
-      }
-    }
-  }
-
-  // Extract and clean text content
-  const textContents = textElements
-    .map(el => el.textContent?.trim())
-    .filter(Boolean)
-    .map(text => 
-      text
-        .replace(/\s+/g, ' ')           // Normalize whitespace
-        .replace(/[^\S\r\n]+/g, ' ')    // Convert multiple spaces to single
-        .replace(/\n{2,}/g, '\n')       // Normalize line breaks
-        .trim()
-    );
-
-  // Combine all text
-  const text = textContents.join(' ').trim();
-
-  // Return empty array if no meaningful content found
-  if (!text) {
-    console.warn(`No text content found for ${url}`);
-    return [];
-  }
-
-  return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
-}
-
-async function searchGoogle(query: string): Promise<SearchResult[]> {
-  if (!process.env.SERPER_API_KEY) {
-    throw new Error('SERPER_API_KEY environment variable is required');
-  }
-
-  const response = await fetch('https://google.serper.dev/search', {
-    method: 'POST',
-    headers: {
-      'X-API-KEY': process.env.SERPER_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      q: query,
-      num: 5, // Get top 5 results
-    }),
-  });
-
-  const data = (await response.json()) as { organic?: SearchResult[] };
-  const results = (data.organic || []).map((result) => {
-    try {
-      const { hostname } = new URL(result.link);
-      return { ...result, hostname };
-    } catch {
-      return result;
-    }
-  });
-
-  return results
-    .filter(
-      (result) =>
-        !DOMAIN_BLOCKLIST.some((domain) => result.hostname?.includes(domain))
-    )
-    .slice(0, MAX_N_PAGES_SCRAPE);
-}
 
 
 import { findSimilarSentences } from './find-similar-sentences';
