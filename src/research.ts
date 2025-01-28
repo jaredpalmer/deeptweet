@@ -242,23 +242,22 @@ research(topic)
     console.log(kleur.dim('─'.repeat(40)));
     console.log(blogPost.summary + '\n');
 
-    for (const section of blogPost.sections) {
-      console.log(kleur.bold(section.title));
-      console.log(kleur.dim('─'.repeat(40)));
-      console.log(section.content + '\n');
-
-      if (section.sources.length) {
-        console.log(kleur.dim('Sources:'));
-        section.sources.forEach((url) => {
-          console.log(kleur.dim(`• ${url}`));
-        });
-        console.log();
+    for (const block of blogPost.content) {
+      if (block.type === 'heading') {
+        console.log(kleur.bold(block.text));
+        console.log(kleur.dim('─'.repeat(40)));
+      } else {
+        console.log(block.text + '\n');
+        
+        if (block.citations?.length) {
+          console.log(kleur.dim('Citations:'));
+          block.citations.forEach(({ url }) => {
+            console.log(kleur.dim(`• ${url}`));
+          });
+          console.log();
+        }
       }
     }
-
-    console.log(kleur.bold('Conclusion'));
-    console.log(kleur.dim('─'.repeat(40)));
-    console.log(blogPost.conclusion);
   })
   .catch((error) => {
     console.error('Error:', error);
