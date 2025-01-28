@@ -129,7 +129,7 @@ function render() {
 
   // Print completion status
   if (state.isComplete) {
-    const duration = ((Date.now() - state.startTime) / 1000).toFixed(1);
+    const duration = ((Date.now() - (state.startTime ?? Date.now())) / 1000).toFixed(1);
     console.log(kleur.dim(`\n⏱️  Done in ${duration}s`));
   }
 }
@@ -183,14 +183,14 @@ class Logger {
 
 const logger = new Logger();
 
-function printBanner(topic) {
+function printBanner(topic: string): void {
   console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
   console.log(kleur.bold().cyan('│      DeepTweet Research Tool      │'));
   console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
   console.log(kleur.bold().yellow(`🎯 Researching: "${topic}"\n`));
 }
 
-function logError(message, details = '') {
+function logError(message: string, details: string = ''): void {
   console.log(kleur.red().bold('\n╭─ ERROR ────────────────────╮'));
   console.log(kleur.red().bold('│ ') + message);
   if (details) {
@@ -199,9 +199,9 @@ function logError(message, details = '') {
   console.log(kleur.red().bold('╰────────────────────────────╯\n'));
 }
 
-function displayInsightsTable(insights) {
+function displayInsightsTable(insights: Insight[]): void {
   // Group insights by topic
-  const byTopic = insights.reduce((acc, insight) => {
+  const byTopic = insights.reduce<Record<string, Insight[]>>((acc, insight) => {
     if (!acc[insight.topic]) acc[insight.topic] = [];
     acc[insight.topic].push(insight);
     return acc;
@@ -246,10 +246,10 @@ function setupKeyboardControls() {
 // Topic discovery and research state
 const researchQueue = new PQueue({ concurrency: 1 }); // Reduce concurrency for clearer output
 const discoveredTopics = new Set();
-const researchInsights = [];
+const researchInsights: Insight[] = [];
 const MAX_TOPICS = 3;
 
-async function discoverNewTopics(content, originalTopic) {
+async function discoverNewTopics(content: string, originalTopic: string): Promise<string[]> {
   const { text } = await generateText({
     model: openai('gpt-4o'),
     messages: [
@@ -272,7 +272,7 @@ async function discoverNewTopics(content, originalTopic) {
     .filter(Boolean);
 }
 
-async function parseWeb(url) {
+async function parseWeb(url: string): Promise<string> {
   const abortController = new AbortController();
   setTimeout(() => abortController.abort(), 10000);
   const htmlString = await fetch(url, { signal: abortController.signal })
@@ -305,7 +305,7 @@ async function parseWeb(url) {
   return text;
 }
 
-async function searchGoogle(query) {
+async function searchGoogle(query: string): Promise<SearchResult[]> {
   if (!process.env.SERPER_API_KEY) {
     throw new Error('SERPER_API_KEY environment variable is required');
   }
@@ -323,21 +323,22 @@ async function searchGoogle(query) {
   });
 
   const data = await response.json();
-  return data.organic || [];
+  const response = await response.json() as { organic?: SearchResult[] };
+  return response.organic || [];
 }
 
-async function fetchAndExtractContent(url) {
+async function fetchAndExtractContent(url: string): Promise<string> {
   try {
     logger.info(`📥 Processing: ${url}`);
     const content = await parseWeb(url);
     return content.slice(0, 4000); // Limit content length
   } catch (error) {
-    logger.error(`⚠️ Error: ${error.message}`);
+    logger.error(`⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return '';
   }
 }
 
-async function summarizeContent(content) {
+async function summarizeContent(content: string): Promise<string> {
   const { text } = await generateText({
     model: openai('gpt-4o'),
     prompt: content,
@@ -347,7 +348,7 @@ async function summarizeContent(content) {
   return text;
 }
 
-async function generateTweetThread(research) {
+async function generateTweetThread(research: string): Promise<string> {
   const { text } = await generateText({
     model: openai('gpt-4o'),
     messages: [
@@ -365,7 +366,7 @@ async function generateTweetThread(research) {
   return text;
 }
 
-async function prioritizeInsight(insight) {
+async function prioritizeInsight(insight: string): Promise<number> {
   const { text } = await generateText({
     model: openai('gpt-4o'),
     messages: [
@@ -384,7 +385,7 @@ async function prioritizeInsight(insight) {
   return score;
 }
 
-async function researchTopic(topic, isSubTopic = false) {
+async function researchTopic(topic: string, isSubTopic: boolean = false): Promise<{ tweetThread: string; insights: Insight[] } | void> {
   const startTime = Date.now();
 
   if (!isSubTopic) {
@@ -504,7 +505,7 @@ async function researchTopic(topic, isSubTopic = false) {
 
     console.log(kleur.bold().cyan('\n🧵 Tweet Thread'));
     console.log(kleur.dim('─'.repeat(40)));
-    console.log(kleur.blue(tweetThread));
+    console.log(kleur.blue(tweetThread || ''));
 
     return { tweetThread, insights: researchInsights };
   }
