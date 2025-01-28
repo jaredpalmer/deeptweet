@@ -219,7 +219,7 @@ async function research(topic: string): Promise<BlogPost> {
   // Write outline to file
   const outlinePath = path.join(
     'output',
-    `${sanitizeFilename(topic)}-2-outline.md`
+    `${sanitizeFilename(topic)}-2-outline.json`
   );
   await fs.writeFile(outlinePath, JSON.stringify(outline, null, 2), 'utf-8');
   console.log(kleur.dim(`Wrote outline to ${outlinePath}`));
@@ -404,13 +404,20 @@ async function research(topic: string): Promise<BlogPost> {
     `\r${kleur.dim('Initial polish complete!'.padEnd(40))}${kleur.green('✓\n')}`
   );
 
-  // Write improved version to file
-  const improvedPath = path.join(
+  // Write improved version to files
+  const improvedJsonPath = path.join(
+    'output',
+    `${sanitizeFilename(topic)}-3-improved.json`
+  );
+  await fs.writeFile(improvedJsonPath, JSON.stringify(improved, null, 2), 'utf-8');
+  console.log(kleur.dim(`Wrote improved JSON to ${improvedJsonPath}`));
+
+  const improvedMdPath = path.join(
     'output',
     `${sanitizeFilename(topic)}-3-improved.md`
   );
-  await writeBlogPostMarkdown(improved, topic, improvedPath);
-  console.log(kleur.dim(`Wrote improved version to ${improvedPath}`));
+  await writeBlogPostMarkdown(improved, topic, improvedMdPath);
+  console.log(kleur.dim(`Wrote improved markdown to ${improvedMdPath}`));
 
   console.log(kleur.dim('\nPhase 5: Final Polish'));
   console.log(kleur.dim('─'.repeat(30)));
