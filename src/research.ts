@@ -55,31 +55,44 @@ async function extractContent(url: string): Promise<string> {
   }
 }
 
+import { findSimilarSentences } from './find-similar-sentences';
+import { generateQuery } from './generate-query';
+import { chunk } from './utils';
+
 async function research(topic: string): Promise<BlogPost> {
-  // Step 1: Generate optimized search query
+  // Step 1: Generate optimized search queries
   console.log(kleur.blue('🔍 Researching: ') + topic);
   
-  const { text: searchQuery } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content: 'Create a search query to find recent, high-quality business and technical information about this topic.'
-      },
-      { role: 'user', content: topic }
-    ]
-  });
+  // Generate multiple search queries for different aspects
+  const queries = await Promise.all([
+    generateQuery([{ id: '1', role: 'user', content: `${topic} business impact and use cases` }]),
+    generateQuery([{ id: '2', role: 'user', content: `${topic} technical implementation details` }]),
+    generateQuery([{ id: '3', role: 'user', content: `${topic} market trends and analysis` }])
+  ]);
 
-  // Step 2: Search and extract content
+  // Step 2: Search and extract content from multiple angles
   console.log(kleur.dim('Searching...'));
-  const results = await searchGoogle(searchQuery);
+  const allResults = await Promise.all(queries.map(searchGoogle));
+  const uniqueUrls = new Set(allResults.flat().map(r => r.link));
   
   const contents = await Promise.all(
-    results.map(async result => ({
-      content: await extractContent(result.link),
-      url: result.link
+    Array.from(uniqueUrls).map(async url => ({
+      content: await extractContent(url),
+      url
     }))
   );
+
+  // Step 2.5: Find most relevant content using embeddings
+  console.log(kleur.dim('Analyzing relevance...'));
+  const allSentences = contents
+    .map(c => c.content.split(/[.!?]+/))
+    .flat()
+    .filter(s => s.trim().length > 50); // Filter out short sentences
+
+  const topSentenceIndices = await findSimilarSentences(topic, allSentences, { topK: 10 });
+  const mostRelevantContent = topSentenceIndices
+    .map(i => allSentences[i])
+    .join('\n\n');
 
   // Step 3: Generate blog post outline
   console.log(kleur.dim('Creating outline...'));
@@ -99,7 +112,7 @@ async function research(topic: string): Promise<BlogPost> {
       },
       {
         role: 'user',
-        content: contents.map(c => c.content).join('\n\n')
+        content: mostRelevantContent
       }
     ]
   });
@@ -121,7 +134,7 @@ async function research(topic: string): Promise<BlogPost> {
           },
           {
             role: 'user',
-            content: `Section title: ${section.title}\n\nReference content:\n${contents.map(c => c.content).join('\n\n')}`
+            content: `Section title: ${section.title}\n\nReference content:\n${mostRelevantContent}`
           }
         ]
       });
