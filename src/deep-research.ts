@@ -479,7 +479,7 @@ async function researchTopic(
 
       if (!isSubTopic) {
         logger.info('🔍 Discovering related topics...');
-        const newTopics = await discoverNewTopics(content, topic);
+        const newTopics = await discoverNewTopics(relevantContent, topic);
         logger.success(`🔍 Found ${newTopics.length} related topics`);
         newTopics.forEach((t) => logger.log(kleur.dim(`└─ ${t}`)));
 
