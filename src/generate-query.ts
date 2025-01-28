@@ -1,9 +1,7 @@
 import { format } from 'date-fns/format';
-import { z } from 'zod';
-// import JSON5 from 'json5'
 import { Message } from 'ai';
-import { ChatCompletionMessageParam } from 'openai/resources';
-import { openai } from '@/lib/openai';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
 
 // const listSchema = z.array(z.string()).default([])
 
@@ -79,19 +77,16 @@ Current Question: Where is it being hosted ?`,
     },
   ];
 
-  const { choices } = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
+  const { text } = await generateText({
+    model: openai('gpt-3.5-turbo'),
     messages: [
       {
         role: 'system',
         content: `You are tasked with generating web search queries. Give me an appropriate query to answer my question for google search. Answer with only the query. Today is ${currentDate}`,
       },
       ...convQuery,
-    ] as ChatCompletionMessageParam[],
+    ],
   });
 
-  const webQuery = choices[0].message.content;
-
-  // return (queryModifier + ' ' + webQuery).trim()
-  return (webQuery ?? '').trim();
+  return text.trim();
 }
