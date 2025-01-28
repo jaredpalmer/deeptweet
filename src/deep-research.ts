@@ -40,7 +40,12 @@ const MAX_N_PAGES_SCRAPE = 10;
 const MAX_N_PAGES_EMBED = 5;
 const MAX_N_CHUNKS = 100;
 const CHUNK_CHAR_LENGTH = 400;
-const DOMAIN_BLOCKLIST = ['youtube.com', 'facebook.com', 'twitter.com', 'instagram.com'];
+const DOMAIN_BLOCKLIST = [
+  'youtube.com',
+  'facebook.com',
+  'twitter.com',
+  'instagram.com',
+];
 
 interface Source {
   url: string;
@@ -83,7 +88,7 @@ const state: State = {
   currentTasks: new Map<string, string>(),
   tweetThread: null,
   startTime: null,
-  isComplete: false
+  isComplete: false,
 };
 
 enum EventType {
@@ -93,10 +98,14 @@ enum EventType {
   TASK_START = 'task_start',
   TASK_END = 'task_end',
   INSIGHT_ADDED = 'insight_added',
-  TOPIC_ADDED = 'topic_added'
+  TOPIC_ADDED = 'topic_added',
 }
 
-function addEvent(type: EventType, message: string, data: Record<string, any> = {}) {
+function addEvent(
+  type: EventType,
+  message: string,
+  data: Record<string, any> = {}
+) {
   state.events.push({
     type,
     message,
@@ -164,7 +173,10 @@ function render() {
 
   // Print completion status
   if (state.isComplete) {
-    const duration = ((Date.now() - (state.startTime ?? Date.now())) / 1000).toFixed(1);
+    const duration = (
+      (Date.now() - (state.startTime ?? Date.now())) /
+      1000
+    ).toFixed(1);
     console.log(kleur.dim(`\n⏱️  Done in ${duration}s`));
   }
 }
@@ -284,9 +296,12 @@ const discoveredTopics = new Set();
 const researchInsights: Insight[] = [];
 const MAX_TOPICS = 3;
 
-async function discoverNewTopics(content: string, originalTopic: string): Promise<string[]> {
+async function discoverNewTopics(
+  content: string,
+  originalTopic: string
+): Promise<string[]> {
   const { text } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
@@ -336,7 +351,7 @@ async function parseWeb(url: string): Promise<string[]> {
 
   // combine text contents from paragraphs and then remove newlines and multiple spaces
   const text = paragraphTexts.join(' ').replace(/ {2}|\r\n|\n|\r/gm, '');
-  
+
   return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
 }
 
@@ -357,8 +372,8 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
     }),
   });
 
-  const data = await response.json() as { organic?: SearchResult[] };
-  const results = (data.organic || []).map(result => {
+  const data = (await response.json()) as { organic?: SearchResult[] };
+  const results = (data.organic || []).map((result) => {
     try {
       const { hostname } = new URL(result.link);
       return { ...result, hostname };
@@ -368,7 +383,10 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
   });
 
   return results
-    .filter(result => !DOMAIN_BLOCKLIST.some(domain => result.hostname?.includes(domain)))
+    .filter(
+      (result) =>
+        !DOMAIN_BLOCKLIST.some((domain) => result.hostname?.includes(domain))
+    )
     .slice(0, MAX_N_PAGES_SCRAPE);
 }
 
@@ -377,14 +395,16 @@ async function fetchAndExtractContent(url: string): Promise<string[]> {
     logger.info(`📥 Processing: ${url}`);
     return await parseWeb(url);
   } catch (error) {
-    logger.error(`⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logger.error(
+      `⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
     return [];
   }
 }
 
 async function summarizeContent(content: string): Promise<string> {
   const { text } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     prompt: content,
     system:
       'You are a research assistant. Summarize the provided content into 2-3 key insights. Focus on factual information and interesting findings.',
@@ -392,44 +412,55 @@ async function summarizeContent(content: string): Promise<string> {
   return text;
 }
 
-async function generateResearchPaper(topic: string, insights: Insight[], sources: Source[]): Promise<ResearchPaper> {
+async function generateResearchPaper(
+  topic: string,
+  insights: Insight[],
+  sources: Source[]
+): Promise<ResearchPaper> {
   // Generate outline
   const { text: outlineText } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
+        content:
+          'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
       },
       {
         role: 'user',
-        content: `Topic: ${topic}\n\nKey insights:\n${insights.map(i => `- ${i.summary}`).join('\n')}`,
+        content: `Topic: ${topic}\n\nKey insights:\n${insights
+          .map((i) => `- ${i.summary}`)
+          .join('\n')}`,
       },
     ],
   });
 
   // Generate abstract
   const { text: abstract } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
+        content:
+          'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
       },
       {
         role: 'user',
-        content: `Topic: ${topic}\n\nKey insights:\n${insights.map(i => `- ${i.summary}`).join('\n')}`,
+        content: `Topic: ${topic}\n\nKey insights:\n${insights
+          .map((i) => `- ${i.summary}`)
+          .join('\n')}`,
       },
     ],
   });
 
   // Generate introduction
   const { text: introduction } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
+        content:
+          'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
       },
       {
         role: 'user',
@@ -443,15 +474,18 @@ async function generateResearchPaper(topic: string, insights: Insight[], sources
 
   // Generate conclusion
   const { text: conclusion } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content: 'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
+        content:
+          'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
       },
       {
         role: 'user',
-        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections.map(s => s.title).join('\n')}`,
+        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections
+          .map((s) => s.title)
+          .join('\n')}`,
       },
     ],
   });
@@ -462,28 +496,36 @@ async function generateResearchPaper(topic: string, insights: Insight[], sources
     introduction,
     sections,
     conclusion,
-    references: sources
+    references: sources,
   };
 }
 
-async function generateSections(outline: string, insights: Insight[], sources: Source[]): Promise<Section[]> {
+async function generateSections(
+  outline: string,
+  insights: Insight[],
+  sources: Source[]
+): Promise<Section[]> {
   const sections: Section[] = [];
   const outlineLines = outline.split('\n').filter(Boolean);
-  
+
   for (const line of outlineLines) {
-    if (!line.startsWith('  ')) { // Main section
+    if (!line.startsWith('  ')) {
+      // Main section
       const { text: sectionContent } = await generateText({
-        model: openai('gpt-4o'),
+        model: openai('gpt-4o-mini'),
         messages: [
           {
             role: 'system',
-            content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
+            content:
+              'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
           },
           {
             role: 'user',
             content: `Section title: ${line}\n\nRelevant insights:\n${insights
-              .filter(i => i.summary.toLowerCase().includes(line.toLowerCase()))
-              .map(i => `- ${i.summary} (${i.url})`)
+              .filter((i) =>
+                i.summary.toLowerCase().includes(line.toLowerCase())
+              )
+              .map((i) => `- ${i.summary} (${i.url})`)
               .join('\n')}`,
           },
         ],
@@ -492,8 +534,8 @@ async function generateSections(outline: string, insights: Insight[], sources: S
       sections.push({
         title: line.replace(/^\d+\.\s*/, ''),
         content: sectionContent,
-        sources: sources.filter(s => sectionContent.includes(s.url)),
-        subsections: []
+        sources: sources.filter((s) => sectionContent.includes(s.url)),
+        subsections: [],
       });
     }
   }
@@ -503,7 +545,7 @@ async function generateSections(outline: string, insights: Insight[], sources: S
 
 async function prioritizeInsight(insight: string): Promise<number> {
   const { text } = await generateText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
@@ -547,10 +589,10 @@ async function researchTopic(
     const messages = [
       {
         role: 'user',
-        content: parentTopic 
+        content: parentTopic
           ? `This is related to "${parentTopic}". I want to learn about: ${topic}`
-          : topic
-      }
+          : topic,
+      },
     ];
     const searchQuery = await generateQuery(messages);
     logger.info(`🔍 Searching for: ${searchQuery}`);
@@ -565,7 +607,9 @@ async function researchTopic(
     logger.success('🔍 Found ' + urls.length + ' relevant sources');
     urls.forEach((url) => logger.log(kleur.dim(`└─ ${url}`)));
   } catch (error) {
-    logger.error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(
+      `Search failed: ${error instanceof Error ? error.message : String(error)}`
+    );
     logger.error(`Research failed for: ${topic}`);
     logger.endTask(taskId, `❌ Research failed for: ${topic}`);
     return;
@@ -579,9 +623,13 @@ async function researchTopic(
     const contentChunks = await fetchAndExtractContent(url);
     if (contentChunks.length > 0) {
       logger.info('🔍 Finding most relevant content...');
-      const relevantIndices = await findSimilarSentences(topic, contentChunks, { topK: 3 });
-      const relevantContent = relevantIndices.map(idx => contentChunks[idx]).join(' ');
-      
+      const relevantIndices = await findSimilarSentences(topic, contentChunks, {
+        topK: 3,
+      });
+      const relevantContent = relevantIndices
+        .map((idx) => contentChunks[idx])
+        .join(' ');
+
       logger.info('✍️ Generating summary...');
       const summary = await summarizeContent(relevantContent);
       summaries.push({ url, summary });
@@ -614,11 +662,14 @@ async function researchTopic(
     logger.info('🔄 Processing research...');
     await researchQueue.onIdle();
 
-    const insightsByTopic = researchInsights.reduce<Record<string, Insight[]>>((acc, insight) => {
-      if (!acc[insight.topic]) acc[insight.topic] = [];
-      acc[insight.topic].push(insight);
-      return acc;
-    }, {});
+    const insightsByTopic = researchInsights.reduce<Record<string, Insight[]>>(
+      (acc, insight) => {
+        if (!acc[insight.topic]) acc[insight.topic] = [];
+        acc[insight.topic].push(insight);
+        return acc;
+      },
+      {}
+    );
 
     const topInsights = Object.entries(insightsByTopic)
       .map(([topic, insights]) => {
@@ -631,10 +682,10 @@ async function researchTopic(
       })
       .join('\n\n');
 
-    const sources = summaries.map(s => ({
+    const sources = summaries.map((s) => ({
       url: s.url,
       content: s.summary,
-      relevance: researchInsights.find(i => i.url === s.url)?.score || 5
+      relevance: researchInsights.find((i) => i.url === s.url)?.score || 5,
     }));
 
     const paper = await generateResearchPaper(topic, researchInsights, sources);
@@ -652,7 +703,7 @@ async function researchTopic(
     console.log(kleur.bold('Introduction'));
     console.log(kleur.dim('─'.repeat(20)));
     console.log(paper.introduction);
-    
+
     for (const section of paper.sections) {
       console.log();
       console.log(kleur.bold(section.title));
