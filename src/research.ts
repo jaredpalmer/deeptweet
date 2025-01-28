@@ -1,4 +1,5 @@
-import { generateText } from 'ai';
+import { generateText, generateObject } from 'ai';
+import { outlineSchema, blogPostSchema } from './schemas';
 import { openai } from '@ai-sdk/openai';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
