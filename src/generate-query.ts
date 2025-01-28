@@ -1,6 +1,5 @@
 import { format } from 'date-fns/format';
-import { Message } from 'ai';
-import { generateText } from 'ai';
+import { Message, generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 
 // const listSchema = z.array(z.string()).default([])
@@ -84,7 +83,7 @@ Current Question: Where is it being hosted ?`,
         role: 'system',
         content: `You are tasked with generating web search queries. Give me an appropriate query to answer my question for google search. Answer with only the query. Today is ${currentDate}`,
       },
-      ...convQuery,
+      ...convQuery.map(({ role, content }) => ({ role, content })),
     ],
   });
 
