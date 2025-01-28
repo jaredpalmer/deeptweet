@@ -589,7 +589,7 @@ async function researchTopic(
     const messages = [
       {
         id: `msg-${Date.now()}`,
-        role: 'user',
+        role: 'user' as const,
         content: parentTopic
           ? `This is related to "${parentTopic}". I want to learn about: ${topic}`
           : topic,
