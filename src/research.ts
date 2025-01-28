@@ -209,30 +209,65 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 6: Quality Improvement
   console.log(kleur.dim('\nPhase 4: Quality Enhancement'));
   console.log(kleur.dim('─'.repeat(30)));
-  process.stdout.write(kleur.dim('Initial polish... '));
+  
+  process.stdout.write(kleur.dim('Starting initial polish... '));
+  
+  // Break down the content for more manageable processing
+  const contentParts = [
+    { type: 'title', content: outline.title },
+    { type: 'summary', content: summary },
+    ...sections.map(s => ({ type: 'section', title: s.title, content: s.content })),
+    { type: 'conclusion', content: conclusion }
+  ];
+
+  // Process each part with progress updates
+  const improvedParts: any[] = [];
+  for (const part of contentParts) {
+    process.stdout.write(`\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`);
+    
+    const { object: improvedPart } = await generateObject({
+      model: openai('gpt-4o-mini'),
+      schema: blogPostSchema,
+      messages: [
+        {
+          role: 'system',
+          content: `Improve this ${part.type} section. Focus on:
+1. Clear business value
+2. Technical accuracy
+3. Engaging style
+4. Actionable insights
+5. Add relevant citations using [^1] style footnotes where appropriate`,
+        },
+        {
+          role: 'user',
+          content: part.type === 'section' 
+            ? `${part.title}\n\n${part.content}\n\nAvailable sources:\n${sourceList.join('\n')}`
+            : `${part.content}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+        },
+      ],
+    });
+    
+    improvedParts.push(improvedPart);
+  }
+
+  // Combine improved parts
+  process.stdout.write(`\r${kleur.dim('Combining improved content...'.padEnd(40))}`);
   const { object: improved } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
     messages: [
       {
         role: 'system',
-        content: `Review and improve this blog post. Focus on:
-1. Clear business value
-2. Technical accuracy
-3. Engaging style
-4. Actionable insights
-5. Add relevant citations using [^1] style footnotes`,
+        content: 'Combine these improved sections into a cohesive blog post, maintaining all improvements and citations.',
       },
       {
         role: 'user',
-        content: `Title: ${outline.title}\n\nSummary: ${summary}\n\n${sections
-          .map((s) => `${s.title}\n\n${s.content}`)
-          .join('\n\n')}\n\n${conclusion}\n\nAvailable sources:\n${sourceList.join('\n')}`,
+        content: JSON.stringify(improvedParts),
       },
     ],
   });
 
-  process.stdout.write(kleur.green('✓\n'));
+  process.stdout.write(`\r${kleur.dim('Initial polish complete!'.padEnd(40))}${kleur.green('✓\n')}`);
 
   // Step 7: Expert Review & Improvements
   console.log(kleur.dim('\nPhase 5: Expert Review'));
