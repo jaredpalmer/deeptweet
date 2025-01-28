@@ -418,6 +418,7 @@ async function generateResearchPaper(
   sources: Source[],
   logger: Logger
 ): Promise<ResearchPaper> {
+  const MAX_IMPROVEMENT_ITERATIONS = 2;
   logger.info('📝 Generating paper outline...');
   
   // Generate outline, abstract, and introduction in parallel
@@ -486,8 +487,8 @@ async function generateResearchPaper(
     ],
   });
 
-  logger.success('✨ Paper structure complete');
-  return {
+  // Initial paper generation
+  const initialPaper = {
     title: `${topic}: A Comprehensive Analysis`,
     abstract,
     introduction,
@@ -495,6 +496,54 @@ async function generateResearchPaper(
     conclusion,
     references: sources,
   };
+
+  // Iterative improvement process
+  let currentPaper = initialPaper;
+  for (let i = 0; i < MAX_IMPROVEMENT_ITERATIONS; i++) {
+    logger.info(`📋 Running critique iteration ${i + 1}/${MAX_IMPROVEMENT_ITERATIONS}...`);
+    
+    // Critique current version
+    const paperContent = [
+      currentPaper.abstract,
+      currentPaper.introduction,
+      ...currentPaper.sections.map(s => s.content),
+      currentPaper.conclusion
+    ].join('\n\n');
+    
+    const critique = await critiquePaper(paperContent);
+    logger.info(`📊 Paper quality score: ${critique.score}/10`);
+    
+    if (critique.score >= 8) {
+      logger.success('✨ Paper meets quality threshold');
+      break;
+    }
+
+    // Improve sections based on critique
+    logger.info('📝 Implementing improvements...');
+    const [improvedAbstract, improvedIntro, improvedConclusion] = await Promise.all([
+      improveSection(currentPaper.abstract, critique),
+      improveSection(currentPaper.introduction, critique),
+      improveSection(currentPaper.conclusion, critique)
+    ]);
+
+    const improvedSections = await Promise.all(
+      currentPaper.sections.map(async section => ({
+        ...section,
+        content: await improveSection(section.content, critique)
+      }))
+    );
+
+    currentPaper = {
+      ...currentPaper,
+      abstract: improvedAbstract,
+      introduction: improvedIntro,
+      sections: improvedSections,
+      conclusion: improvedConclusion
+    };
+  }
+
+  logger.success('✨ Paper structure complete');
+  return currentPaper;
 }
 
 async function generateSections(
