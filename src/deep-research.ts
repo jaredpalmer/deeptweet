@@ -30,7 +30,15 @@ interface SearchResult {
   link: string;
   title?: string;
   snippet?: string;
+  text?: string;
+  hostname?: string;
 }
+
+const MAX_N_PAGES_SCRAPE = 10;
+const MAX_N_PAGES_EMBED = 5;
+const MAX_N_CHUNKS = 100;
+const CHUNK_CHAR_LENGTH = 400;
+const DOMAIN_BLOCKLIST = ['youtube.com', 'facebook.com', 'twitter.com', 'instagram.com'];
 
 interface Insight {
   topic: string;
@@ -273,14 +281,14 @@ async function discoverNewTopics(content: string, originalTopic: string): Promis
     .filter(Boolean);
 }
 
-async function parseWeb(url: string): Promise<string> {
+async function parseWeb(url: string): Promise<string[]> {
   const abortController = new AbortController();
   setTimeout(() => abortController.abort(), 10000);
   const htmlString = await fetch(url, { signal: abortController.signal })
     .then((response) => response.text())
     .catch(() => null);
 
-  if (!htmlString) return '';
+  if (!htmlString) return [];
 
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('error', () => {
@@ -302,8 +310,8 @@ async function parseWeb(url: string): Promise<string> {
 
   // combine text contents from paragraphs and then remove newlines and multiple spaces
   const text = paragraphTexts.join(' ').replace(/ {2}|\r\n|\n|\r/gm, '');
-
-  return text;
+  
+  return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
 }
 
 async function searchGoogle(query: string): Promise<SearchResult[]> {
@@ -324,17 +332,27 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
   });
 
   const data = await response.json() as { organic?: SearchResult[] };
-  return data.organic || [];
+  const results = (data.organic || []).map(result => {
+    try {
+      const { hostname } = new URL(result.link);
+      return { ...result, hostname };
+    } catch {
+      return result;
+    }
+  });
+
+  return results
+    .filter(result => !DOMAIN_BLOCKLIST.some(domain => result.hostname?.includes(domain)))
+    .slice(0, MAX_N_PAGES_SCRAPE);
 }
 
-async function fetchAndExtractContent(url: string): Promise<string> {
+async function fetchAndExtractContent(url: string): Promise<string[]> {
   try {
     logger.info(`📥 Processing: ${url}`);
-    const content = await parseWeb(url);
-    return content.slice(0, 4000); // Limit content length
+    return await parseWeb(url);
   } catch (error) {
     logger.error(`⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return '';
+    return [];
   }
 }
 
@@ -441,10 +459,14 @@ async function researchTopic(
   for (const url of urls) {
     logger.info(`📄 Processing: ${url.slice(0, 50)}...`);
 
-    const content = await fetchAndExtractContent(url);
-    if (content) {
+    const contentChunks = await fetchAndExtractContent(url);
+    if (contentChunks.length > 0) {
+      logger.info('🔍 Finding most relevant content...');
+      const relevantIndices = await findSimilarSentences(topic, contentChunks, { topK: 3 });
+      const relevantContent = relevantIndices.map(idx => contentChunks[idx]).join(' ');
+      
       logger.info('✍️ Generating summary...');
-      const summary = await summarizeContent(content);
+      const summary = await summarizeContent(relevantContent);
       summaries.push({ url, summary });
 
       const score = await prioritizeInsight(summary);
