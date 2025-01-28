@@ -322,9 +322,8 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
     }),
   });
 
-  const data = await response.json();
-  const response = await response.json() as { organic?: SearchResult[] };
-  return response.organic || [];
+  const data = await response.json() as { organic?: SearchResult[] };
+  return data.organic || [];
 }
 
 async function fetchAndExtractContent(url: string): Promise<string> {
@@ -416,7 +415,7 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
     logger.success('🔍 Found ' + urls.length + ' relevant sources');
     urls.forEach((url) => logger.log(kleur.dim(`└─ ${url}`)));
   } catch (error) {
-    logger.error(`Search failed: ${error.message}`);
+    logger.error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
     logger.error(`Research failed for: ${topic}`);
     logger.endTask(taskId, `❌ Research failed for: ${topic}`);
     return;
@@ -461,7 +460,7 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
     logger.info('🔄 Processing research...');
     await researchQueue.onIdle();
 
-    const insightsByTopic = researchInsights.reduce((acc, insight) => {
+    const insightsByTopic = researchInsights.reduce<Record<string, Insight[]>>((acc, insight) => {
       if (!acc[insight.topic]) acc[insight.topic] = [];
       acc[insight.topic].push(insight);
       return acc;
@@ -469,10 +468,10 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
 
     const topInsights = Object.entries(insightsByTopic)
       .map(([topic, insights]) => {
-        const topicInsights = insights
-          .sort((a, b) => b.score - a.score)
+        const topicInsights = (insights as Insight[])
+          .sort((a: Insight, b: Insight) => b.score - a.score)
           .slice(0, 3)
-          .map((i) => `• ${i.summary}`)
+          .map((i: Insight) => `• ${i.summary}`)
           .join('\n');
         return `Topic: ${topic}\n${topicInsights}`;
       })
@@ -507,7 +506,7 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
     console.log(kleur.dim('─'.repeat(40)));
     console.log(kleur.blue(tweetThread || ''));
 
-    return { tweetThread, insights: researchInsights };
+    return { tweetThread: tweetThread || '', insights: researchInsights };
   }
 }
 
