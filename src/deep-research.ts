@@ -588,6 +588,7 @@ async function researchTopic(
   try {
     const messages = [
       {
+        id: `msg-${Date.now()}`,
         role: 'user',
         content: parentTopic
           ? `This is related to "${parentTopic}". I want to learn about: ${topic}`
@@ -723,7 +724,7 @@ async function researchTopic(
       console.log(`[${i + 1}] ${ref.url}`);
     });
 
-    return { paper, insights: researchInsights };
+    return { tweetThread: '', insights: researchInsights };
   }
 }
 
