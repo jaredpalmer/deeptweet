@@ -1,12 +1,7 @@
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 
-export interface SearchResult {
-  title: string;
-  link: string;
-  snippet: string;
-  hostname?: string;
-}
+import { SearchResult } from '../types';
 
 const MAX_N_PAGES_SCRAPE = 10;
 const DOMAIN_BLOCKLIST = [

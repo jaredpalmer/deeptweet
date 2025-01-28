@@ -5,7 +5,9 @@ import { chunk } from '../utils';
 const MAX_N_CHUNKS = 100;
 const CHUNK_CHAR_LENGTH = 400;
 
-export async function parseWeb(url: string): Promise<string[]> {
+import { WebContent } from '../types';
+
+export async function parseWeb(url: string): Promise<WebContent> {
   const abortController = new AbortController();
   setTimeout(() => abortController.abort(), 10000);
   const htmlString = await fetch(url, { signal: abortController.signal })
@@ -83,5 +85,13 @@ export async function parseWeb(url: string): Promise<string[]> {
     return [];
   }
 
-  return chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
+  const chunks = chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
+  
+  try {
+    const { hostname } = new URL(url);
+    const title = document.title;
+    return { url, chunks, hostname, title };
+  } catch (e) {
+    return { url, chunks };
+  }
 }

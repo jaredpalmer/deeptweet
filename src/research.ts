@@ -64,12 +64,22 @@ async function research(topic: string): Promise<BlogPost> {
     .flatMap((c) => c.chunks)
     .filter((s) => s.trim().length > 50); // Filter out short chunks
 
-  const topSentenceIndices = await findSimilarSentences(topic, allSentences, {
+  const topSentenceIndices = await findSimilarSentences(topic, sentences, {
     topK: 10,
   });
-  const mostRelevantContent = topSentenceIndices
-    .map((i) => allSentences[i])
-    .join('\n\n');
+  // Get the most relevant content with their sources
+  const relevantContent = topSentenceIndices.map(i => allSentences[i]);
+  const mostRelevantContent = relevantContent.map(c => c.text).join('\n\n');
+  
+  // Track which sources were used
+  const usedSources = new Set<string>();
+  const contentSources = relevantContent
+    .map(c => c.source)
+    .filter(source => {
+      if (!source.url || usedSources.has(source.url)) return false;
+      usedSources.add(source.url);
+      return true;
+    });
 
   // Step 3: Generate blog post outline
   console.log(kleur.dim('Creating outline...'));
