@@ -57,30 +57,3 @@ export function cleanText(text: string): string {
     .trim();
 }
 
-// Rough token count estimation - GPT models typically use ~4 chars per token
-export function estimateTokenCount(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-// Split text if it exceeds token limit
-export function splitForTokenLimit(text: string, maxTokens: number = 30000): string[] {
-  const chunks: string[] = [];
-  let currentChunk = '';
-  const sentences = text.split(/(?<=[.!?])\s+/);
-
-  for (const sentence of sentences) {
-    const potentialChunk = currentChunk + sentence + ' ';
-    if (estimateTokenCount(potentialChunk) > maxTokens) {
-      chunks.push(currentChunk.trim());
-      currentChunk = sentence + ' ';
-    } else {
-      currentChunk = potentialChunk;
-    }
-  }
-
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-
-  return chunks;
-}

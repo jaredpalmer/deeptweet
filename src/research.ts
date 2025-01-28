@@ -302,60 +302,7 @@ async function research(topic: string): Promise<BlogPost> {
         ? `${(part as { title: string }).title}\n\n${part.content}`
         : part.content;
 
-      // Check token count
-      const tokenCount = estimateTokenCount(content);
-      if (tokenCount > 30000) {
-        console.log(kleur.yellow(`\nWarning: Content too large (${tokenCount} tokens), splitting...`));
-        const chunks = splitForTokenLimit(content);
-        console.log(kleur.dim(`Split into ${chunks.length} chunks`));
-
-        // Process each chunk
-        const improvedChunks = await Promise.all(chunks.map(async (chunk, i) => {
-          process.stdout.write(
-            `\r${kleur.dim(`Processing chunk ${i + 1}/${chunks.length}...`.padEnd(40))}`
-          );
-          
-          const { object: improved } = await generateObject({
-            model: openai('gpt-4o-mini'),
-            schema: blogPostSchema,
-            messages: [
-              {
-                role: 'system',
-                content: `Improve this ${part.type} section chunk. Focus on:
-1. Clear business value
-2. Technical accuracy
-3. Engaging style
-4. Actionable insights
-5. Add relevant citations using [^1] style footnotes where appropriate`,
-              },
-              {
-                role: 'user',
-                content: `${chunk}\n\nAvailable sources:\n${sourceList.join('\n')}`,
-              },
-            ],
-          });
-          return improved;
-        }));
-
-        // Combine chunks
-        const { object: combinedImprovement } = await generateObject({
-          model: openai('gpt-4o-mini'),
-          schema: blogPostSchema,
-          messages: [
-            {
-              role: 'system',
-              content: 'Combine these improved chunks into a cohesive section, maintaining all improvements and citations.',
-            },
-            {
-              role: 'user',
-              content: JSON.stringify(improvedChunks),
-            },
-          ],
-        });
-
-        improvedParts.push(combinedImprovement);
-      } else {
-        // Process normally if within token limit
+        // Process content
         const { object: improvedPart } = await generateObject({
           model: openai('gpt-4o-mini'),
           schema: blogPostSchema,
