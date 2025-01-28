@@ -391,15 +391,61 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
     .slice(0, MAX_N_PAGES_SCRAPE);
 }
 
-async function fetchAndExtractContent(url: string): Promise<string[]> {
+interface ContentContext {
+  url: string;
+  content: string;
+  businessValue: string;
+  technicalInsights: string[];
+  marketContext: string[];
+  relevanceScore: number;
+}
+
+async function fetchAndExtractContent(url: string, topic: string, plan: any): Promise<ContentContext | null> {
   try {
     logger.info(`📥 Processing: ${url}`);
-    return await parseWeb(url);
+    const rawContent = await parseWeb(url);
+    
+    // Evaluate content relevance and extract insights
+    const { text: analysisText } = await withCosts(state.costs, generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content: `Analyze this content for a blog post about ${topic}.
+          Focus on:
+          ${plan.keyQuestions.map(q => `- ${q}`).join('\n')}
+          
+          Return JSON format: {
+            "relevanceScore": number 0-10,
+            "businessValue": "key business insight",
+            "technicalInsights": string[],
+            "marketContext": string[],
+            "relevantContent": "extracted relevant text"
+          }`
+        },
+        { role: 'user', content: rawContent.join('\n') }
+      ]
+    }));
+
+    const analysis = JSON.parse(analysisText);
+    
+    if (analysis.relevanceScore < 6) {
+      return null;
+    }
+
+    return {
+      url,
+      content: analysis.relevantContent,
+      businessValue: analysis.businessValue,
+      technicalInsights: analysis.technicalInsights,
+      marketContext: analysis.marketContext,
+      relevanceScore: analysis.relevanceScore
+    };
   } catch (error) {
     logger.error(
       `⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
-    return [];
+    return null;
   }
 }
 
