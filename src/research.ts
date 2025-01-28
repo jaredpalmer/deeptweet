@@ -10,6 +10,7 @@ import { findSimilarSentences } from './find-similar-sentences';
 import { generateQuery } from './generate-query';
 import { chunk } from './utils';
 import { BlogPost } from './schemas';
+import { researchAgents } from './agents';
 
 const MAX_N_PAGES_EMBED = 5;
 
@@ -185,7 +186,63 @@ async function research(topic: string): Promise<BlogPost> {
     ],
   });
 
-  // Step 7: Final flow improvement
+  // Step 7: Expert Review & Improvements
+  console.log(kleur.dim('Running expert analysis...'));
+  
+  const agentAnalyses = await Promise.all(
+    researchAgents.map(async agent => {
+      console.log(kleur.dim(`- ${agent.name} analyzing...`));
+      const feedback = await agent.analyze(JSON.stringify(improved));
+      return {
+        agent: agent.name,
+        feedback
+      };
+    })
+  );
+
+  // Consolidate agent feedback
+  const { text: consolidatedFeedback } = await generateText({
+    model: openai('gpt-4o-mini'),
+    messages: [
+      {
+        role: 'system',
+        content: `You are a senior editor. Review the expert feedback and provide specific improvements needed. Focus on:
+1. Business value improvements suggested by BusinessValueAnalyst
+2. Technical accuracy issues found by FactChecker
+3. Areas needing more depth from DepthAnalyst
+4. Narrative improvements from Synthesizer`
+      },
+      {
+        role: 'user',
+        content: `Expert feedback:\n${agentAnalyses.map(a => 
+          `${a.agent}:\n${a.feedback}\n`).join('\n')}`
+      }
+    ]
+  });
+
+  // Apply improvements based on agent feedback
+  console.log(kleur.dim('Applying expert suggestions...'));
+  const { object: expertImproved } = await generateObject({
+    model: openai('gpt-4o-mini'),
+    schema: blogPostSchema,
+    messages: [
+      {
+        role: 'system',
+        content: `Improve this blog post based on expert feedback. Make sure to:
+1. Strengthen business value and strategic insights
+2. Fix any technical inaccuracies
+3. Add depth where recommended
+4. Improve narrative flow and connections
+Keep all citations and maintain the overall structure.`
+      },
+      {
+        role: 'user',
+        content: `Original post:\n${JSON.stringify(improved)}\n\nExpert feedback:\n${consolidatedFeedback}`
+      }
+    ]
+  });
+
+  // Step 8: Final flow improvement
   console.log(kleur.dim('Final polish...'));
   const { object: final } = await generateObject({
     model: openai('gpt-4o-mini'),
@@ -202,7 +259,7 @@ Keep all technical content and citations intact.`,
       },
       {
         role: 'user',
-        content: JSON.stringify(improved),
+        content: JSON.stringify(expertImproved),
       },
     ],
   });
