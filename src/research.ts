@@ -58,13 +58,31 @@ async function research(topic: string): Promise<BlogPost> {
   clearInterval(spinnerInterval);
   process.stdout.write('\r✓ Search queries generated\n');
 
-  // Step 2: Search and extract content from multiple angles
+  // Step 2: Search and extract content in parallel
   console.log(kleur.dim('\nPhase 1: Content Discovery'));
   console.log(kleur.dim('─'.repeat(30)));
-  const allResults = await Promise.all(queries.map(searchGoogle));
-  const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
+  
+  // Run searches and web parsing concurrently
+  const [allResults, initialEmbedding] = await Promise.all([
+    Promise.all(queries.map(searchGoogle)),
+    // Start embedding the topic early
+    embedMany({
+      model: openai.embedding('text-embedding-3-small'),
+      values: [topic],
+    })
+  ]);
 
-  const contents = await Promise.all(Array.from(uniqueUrls).map(parseWeb));
+  const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
+  
+  // Process in batches of 5 to avoid rate limits
+  const urlBatches = chunk(Array.from(uniqueUrls), 5);
+  const contents = [];
+  
+  for (const batch of urlBatches) {
+    const batchResults = await Promise.all(batch.map(parseWeb));
+    contents.push(...batchResults);
+    process.stdout.write(`\r${kleur.dim(`Processed ${contents.length}/${uniqueUrls.size} sources...`)}`);
+  }
 
   console.log(kleur.green(`✓ Found ${uniqueUrls.size} unique sources`));
 
@@ -171,10 +189,16 @@ async function research(topic: string): Promise<BlogPost> {
   await fs.writeFile(outlinePath, JSON.stringify(outline, null, 2), 'utf-8');
   console.log(kleur.dim(`Wrote outline to ${outlinePath}`));
 
-  // Step 4: Generate each section
+  // Step 4: Generate sections in parallel batches
   process.stdout.write(kleur.dim('Writing sections... '));
-  const sections = await Promise.all(
-    outline.sections.map(async (section: any) => {
+  
+  // Process sections in batches of 3 to avoid rate limits
+  const sectionBatches = chunk(outline.sections, 3);
+  const sections = [];
+  
+  for (const batch of sectionBatches) {
+    const batchResults = await Promise.all(
+      batch.map(async (section: any) => {
       const { text: content } = await generateText({
         model: openai('gpt-4o-mini'),
         messages: [
@@ -191,47 +215,51 @@ async function research(topic: string): Promise<BlogPost> {
         ],
       });
 
-      return {
-        title: section.title,
-        content,
-        sources: sourceList,
-      };
-    })
-  );
+        return {
+          title: section.title,
+          content,
+          sources: sourceList,
+        };
+      })
+    );
+    sections.push(...batchResults);
+    process.stdout.write(`\r${kleur.dim(`Generated ${sections.length}/${outline.sections.length} sections...`)}`);
+  }
 
   process.stdout.write(kleur.green('✓\n'));
 
-  // Step 5: Generate summary and conclusion
-  process.stdout.write(kleur.dim('Generating summary... '));
-  const { text: summary } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content:
-          'Write a compelling executive summary for a technical blog post. Focus on the key takeaways and business value.',
-      },
-      {
-        role: 'user',
-        content: sections.map((s) => s.content).join('\n\n'),
-      },
-    ],
-  });
-
-  const { text: conclusion } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content:
-          'Write a strong conclusion for a technical blog post. Summarize key points and provide clear next steps or recommendations.',
-      },
-      {
-        role: 'user',
-        content: sections.map((s) => s.content).join('\n\n'),
-      },
-    ],
-  });
+  // Step 5: Generate summary and conclusion in parallel
+  process.stdout.write(kleur.dim('Generating summary and conclusion... '));
+  const [{ text: summary }, { text: conclusion }] = await Promise.all([
+    generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Write a compelling executive summary for a technical blog post. Focus on the key takeaways and business value.',
+        },
+        {
+          role: 'user',
+          content: sections.map((s) => s.content).join('\n\n'),
+        },
+      ],
+    }),
+    generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Write a strong conclusion for a technical blog post. Summarize key points and provide clear next steps or recommendations.',
+        },
+        {
+          role: 'user',
+          content: sections.map((s) => s.content).join('\n\n'),
+        },
+      ],
+    })
+  ]);
 
   process.stdout.write(kleur.green('✓\n'));
 
@@ -257,13 +285,17 @@ async function research(topic: string): Promise<BlogPost> {
     { type: 'conclusion', content: conclusion },
   ];
 
-  // Process each part with progress updates and error handling
+  // Process parts in parallel batches with error handling
   const improvedParts: any[] = [];
-  for (const part of contentParts) {
-    try {
-      process.stdout.write(
-        `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
-      );
+  const partBatches = chunk(contentParts, 2); // Process 2 parts at a time
+  
+  for (const batch of partBatches) {
+    const batchResults = await Promise.all(
+      batch.map(async (part) => {
+        try {
+          process.stdout.write(
+            `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
+          );
 
       // Prepare content
       const content = part.type === 'section'
