@@ -659,29 +659,8 @@ async function researchTopic(
   logger.success('📑 Content analysis completed');
 
   if (!isSubTopic) {
-    console.log(); // Add spacing
     logger.info('🔄 Processing research...');
     await researchQueue.onIdle();
-
-    const insightsByTopic = researchInsights.reduce<Record<string, Insight[]>>(
-      (acc, insight) => {
-        if (!acc[insight.topic]) acc[insight.topic] = [];
-        acc[insight.topic].push(insight);
-        return acc;
-      },
-      {}
-    );
-
-    const topInsights = Object.entries(insightsByTopic)
-      .map(([topic, insights]) => {
-        const topicInsights = (insights as Insight[])
-          .sort((a: Insight, b: Insight) => b.score - a.score)
-          .slice(0, 3)
-          .map((i: Insight) => `• ${i.summary}`)
-          .join('\n');
-        return `Topic: ${topic}\n${topicInsights}`;
-      })
-      .join('\n\n');
 
     const sources = summaries.map((s) => ({
       url: s.url,
@@ -689,41 +668,62 @@ async function researchTopic(
       relevance: researchInsights.find((i) => i.url === s.url)?.score || 5,
     }));
 
+    logger.info('📝 Generating research paper...');
     const paper = await generateResearchPaper(topic, researchInsights, sources);
-    logger.success('🔄 Research paper generated');
+    logger.success('✨ Research paper generated');
 
-    // Display paper
-    console.log(kleur.bold().cyan('\n📑 Research Paper'));
-    console.log(kleur.dim('─'.repeat(40)));
+    // Display paper with better formatting
+    console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
+    console.log(kleur.bold().cyan('│         Research Paper            │'));
+    console.log(kleur.bold().cyan('╰─────────────────────────────────╯\n'));
+
+    // Title
     console.log(kleur.bold().blue(paper.title));
+    console.log(kleur.dim('═'.repeat(paper.title.length)));
     console.log();
-    console.log(kleur.bold('Abstract'));
-    console.log(kleur.dim('─'.repeat(20)));
+
+    // Abstract
+    console.log(kleur.bold().yellow('Abstract'));
+    console.log(kleur.dim('─'.repeat(40)));
     console.log(paper.abstract);
     console.log();
-    console.log(kleur.bold('Introduction'));
-    console.log(kleur.dim('─'.repeat(20)));
-    console.log(paper.introduction);
 
+    // Introduction
+    console.log(kleur.bold().yellow('Introduction'));
+    console.log(kleur.dim('─'.repeat(40)));
+    console.log(paper.introduction);
+    console.log();
+
+    // Sections
     for (const section of paper.sections) {
-      console.log();
-      console.log(kleur.bold(section.title));
-      console.log(kleur.dim('─'.repeat(20)));
+      console.log(kleur.bold().yellow(section.title));
+      console.log(kleur.dim('─'.repeat(40)));
       console.log(section.content);
+      
+      if (section.sources.length > 0) {
+        console.log(kleur.dim('\nSection Sources:'));
+        section.sources.forEach(source => {
+          console.log(kleur.dim(`• ${source.url}`));
+        });
+      }
+      console.log();
     }
 
-    console.log();
-    console.log(kleur.bold('Conclusion'));
-    console.log(kleur.dim('─'.repeat(20)));
+    // Conclusion
+    console.log(kleur.bold().yellow('Conclusion'));
+    console.log(kleur.dim('─'.repeat(40)));
     console.log(paper.conclusion);
-
     console.log();
-    console.log(kleur.bold('References'));
-    console.log(kleur.dim('─'.repeat(20)));
+
+    // References
+    console.log(kleur.bold().yellow('References'));
+    console.log(kleur.dim('─'.repeat(40)));
     paper.references.forEach((ref, i) => {
       console.log(`[${i + 1}] ${ref.url}`);
     });
+    console.log();
 
+    state.isComplete = true;
     return { tweetThread: '', insights: researchInsights };
   }
 }
