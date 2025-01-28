@@ -562,8 +562,8 @@ async function generateSections(
   // Process sections in parallel with a concurrency limit
   const sectionQueue = new PQueue({ concurrency: 2 });
   
-  const sectionPromises = mainSections.map((line, index) => {
-    return sectionQueue.add(async () => {
+  const sectionPromises = mainSections.map((line, index) => 
+    sectionQueue.add(async (): Promise<Section> => {
       logger.info(`📄 Generating section ${index + 1}/${mainSections.length}: ${line.replace(/^\d+\.\s*/, '')}`);
       
       const { text: sectionContent } = await generateText({
@@ -583,7 +583,7 @@ async function generateSections(
         ],
       });
 
-      const section = {
+      const section: Section = {
         title: line.replace(/^\d+\.\s*/, ''),
         content: sectionContent,
         sources: sources.filter((s) => sectionContent.includes(s.url)),
@@ -592,10 +592,10 @@ async function generateSections(
 
       logger.success(`✓ Completed section: ${section.title}`);
       return section;
-    });
-  });
+    })
+  );
 
-  const completedSections = await Promise.all(sectionPromises);
+  const completedSections = await Promise.all<Section>(sectionPromises);
   sections.push(...completedSections);
 
   return sections;
