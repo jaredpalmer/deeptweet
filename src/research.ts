@@ -5,6 +5,8 @@ import kleur from 'kleur';
 import 'dotenv/config';
 import { parseWeb } from './web/scrape';
 import { searchGoogle, SearchResult } from './web/search';
+import { findSimilarSentences } from './find-similar-sentences';
+import { generateQuery } from './generate-query';
 
 interface BlogPost {
   title: string;
@@ -18,12 +20,6 @@ interface BlogPost {
 }
 
 const MAX_N_PAGES_EMBED = 5;
-
-
-
-import { findSimilarSentences } from './find-similar-sentences';
-import { generateQuery } from './generate-query';
-import { chunk } from './utils';
 
 async function research(topic: string): Promise<BlogPost> {
   // Step 1: Generate optimized search queries
@@ -65,7 +61,7 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('Analyzing relevance...'));
   const allSentences = contents
-    .flatMap(c => c.chunks)
+    .flatMap((c) => c.chunks)
     .filter((s) => s.trim().length > 50); // Filter out short chunks
 
   const topSentenceIndices = await findSimilarSentences(topic, allSentences, {
@@ -77,7 +73,7 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Step 3: Generate blog post outline
   console.log(kleur.dim('Creating outline...'));
-  const outline = await generateObject({
+  const { object: outline } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: outlineSchema,
     messages: [
@@ -154,7 +150,7 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Step 6: Final quality check and improvements
   console.log(kleur.dim('Polishing content...'));
-  const improved = await generateObject({
+  const { object: improved } = await generateObject({
     model: openai('gpt-4o-mini'),
     schema: blogPostSchema,
     messages: [
