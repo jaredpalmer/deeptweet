@@ -593,12 +593,12 @@ async function generateSections(
     return section;
   };
 
-  const sectionPromises = mainSections.map((line, index) => 
+  const sectionPromises: Promise<Section>[] = mainSections.map((line, index) => 
     sectionQueue.add(() => generateSection(line, index))
   );
 
-  const completedSections = await Promise.all<Section>(sectionPromises);
-  sections.push(...(completedSections as Section[]));
+  const completedSections = await Promise.all(sectionPromises);
+  sections.push(...completedSections);
 
   return sections;
 }
