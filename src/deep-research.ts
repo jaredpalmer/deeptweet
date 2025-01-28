@@ -562,40 +562,42 @@ async function generateSections(
   // Process sections in parallel with a concurrency limit
   const sectionQueue = new PQueue({ concurrency: 2 });
   
+  const generateSection = async (line: string, index: number): Promise<Section> => {
+    logger.info(`📄 Generating section ${index + 1}/${mainSections.length}: ${line.replace(/^\d+\.\s*/, '')}`);
+    
+    const { text: sectionContent } = await generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
+        },
+        {
+          role: 'user',
+          content: `Section title: ${line}\n\nRelevant insights:\n${insights
+            .filter((i) => i.summary.toLowerCase().includes(line.toLowerCase()))
+            .map((i) => `- ${i.summary} (${i.url})`)
+            .join('\n')}`,
+        },
+      ],
+    });
+
+    const section: Section = {
+      title: line.replace(/^\d+\.\s*/, ''),
+      content: sectionContent,
+      sources: sources.filter((s) => sectionContent.includes(s.url)),
+      subsections: [],
+    };
+
+    logger.success(`✓ Completed section: ${section.title}`);
+    return section;
+  };
+
   const sectionPromises = mainSections.map((line, index) => 
-    sectionQueue.add(async (): Promise<Section> => {
-      logger.info(`📄 Generating section ${index + 1}/${mainSections.length}: ${line.replace(/^\d+\.\s*/, '')}`);
-      
-      const { text: sectionContent } = await generateText({
-        model: openai('gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
-          },
-          {
-            role: 'user',
-            content: `Section title: ${line}\n\nRelevant insights:\n${insights
-              .filter((i) => i.summary.toLowerCase().includes(line.toLowerCase()))
-              .map((i) => `- ${i.summary} (${i.url})`)
-              .join('\n')}`,
-          },
-        ],
-      });
-
-      const section: Section = {
-        title: line.replace(/^\d+\.\s*/, ''),
-        content: sectionContent,
-        sources: sources.filter((s) => sectionContent.includes(s.url)),
-        subsections: [],
-      };
-
-      logger.success(`✓ Completed section: ${section.title}`);
-      return section;
-    })
+    sectionQueue.add(() => generateSection(line, index))
   );
 
-  const completedSections = await Promise.all<Section>(sectionPromises);
+  const completedSections = await Promise.all(sectionPromises);
   sections.push(...completedSections);
 
   return sections;
