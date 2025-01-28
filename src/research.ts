@@ -108,64 +108,31 @@ async function research(topic: string): Promise<BlogPost> {
   console.log(kleur.dim(`• ${successCount} sources processed successfully`));
   console.log(kleur.dim(`• ${failCount} sources failed or were empty`));
 
-  // Step 2.5: Find most relevant content using embeddings
+  // Step 2.5: Process content
   console.log(kleur.dim('\nPhase 2: Content Analysis'));
   console.log(kleur.dim('─'.repeat(30)));
 
-  // Process chunks
-  process.stdout.write(kleur.dim('Analyzing content... '));
-  const allSentences = contents.flatMap((content) => {
-    const validChunks = content.chunks
-      .filter((s) => s.trim().length > 50) // Filter out short chunks
-      .map((chunk) => ({
-        text: chunk,
-        source: {
-          url: content.url,
-          title: content.title || 'Untitled',
-          hostname: content.hostname || new URL(content.url).hostname,
-        },
-      }));
-    
-    if (validChunks.length > 0) {
-      process.stdout.write(kleur.dim('.'));
+  // Combine all content
+  const allContent = contents.map(content => ({
+    text: content.chunks.join('\n\n'),
+    source: {
+      url: content.url,
+      title: content.title || 'Untitled',
+      hostname: content.hostname || new URL(content.url).hostname,
     }
-    return validChunks;
-  });
-  process.stdout.write(kleur.green(' done\n'));
-  
-  const stats = {
-    totalChunks: allSentences.length,
-    avgChunkLength: Math.round(
-      allSentences.reduce((acc, s) => acc + s.text.length, 0) / allSentences.length
-    ),
-  };
-  
-  console.log(kleur.dim(`Found ${stats.totalChunks} content chunks (avg length: ${stats.avgChunkLength} chars)`));
+  }));
 
-  // Find most relevant content
-  process.stdout.write(kleur.dim('Analyzing relevance with embeddings... '));
-  const sentences = allSentences.map((s) => s.text);
-  const topSentenceIndices = await findSimilarSentences(topic, sentences, {
-    topK: 10,
-  });
-  process.stdout.write(kleur.green('✓\n'));
+  // Track sources
+  const sourceList = allContent
+    .map(content => content.source.url)
+    .filter(Boolean);
 
-  // Get the most relevant content with their sources
-  const relevantContent = topSentenceIndices.map((i) => allSentences[i]);
-  const mostRelevantContent = relevantContent.map((c) => c.text).join('\n\n');
+  // Combine all content into one string
+  const mostRelevantContent = allContent
+    .map(content => content.text)
+    .join('\n\n');
 
-  // Track which sources were used
-  const usedSources = new Set<string>();
-  const contentSources = relevantContent
-    .map((c) => c.source)
-    .filter((source) => {
-      if (!source.url || usedSources.has(source.url)) return false;
-      usedSources.add(source.url);
-      return true;
-    });
-
-  // Get formatted source list for citations
-  const sourceList = contentSources.map((source) => source.url).filter(Boolean);
+  console.log(kleur.dim(`Processing ${allContent.length} sources...`));
 
   // Write initial content to file
   const initialContentPath = path.join(
@@ -175,24 +142,15 @@ async function research(topic: string): Promise<BlogPost> {
   await fs.writeFile(initialContentPath, mostRelevantContent, 'utf-8');
   console.log(kleur.dim(`Wrote initial content to ${initialContentPath}`));
 
-  // Show summary of findings
+  // Show summary
   console.log(kleur.dim('\nContent Analysis Summary:'));
-  console.log(
-    kleur.dim('• ') +
-      `${relevantContent.length} most relevant passages selected`
-  );
-  console.log(
-    kleur.dim('• ') + `${sourceList.length} unique sources identified`
-  );
-
-  // Show a preview of top content (first 100 chars of first 2 passages)
-  console.log(kleur.dim('\nTop Passages Preview:'));
-  relevantContent.slice(0, 2).forEach((content, i) => {
-    const preview = content.text.slice(0, 100).trim() + '...';
-    console.log(kleur.dim(`${i + 1}. `) + preview);
-    console.log(
-      kleur.dim(`   Source: ${content.source.hostname || 'unknown'}\n`)
-    );
+  console.log(kleur.dim('• ') + `${sourceList.length} sources processed`);
+  
+  // Show preview of first 2 sources
+  console.log(kleur.dim('\nSource Preview:'));
+  allContent.slice(0, 2).forEach((content, i) => {
+    console.log(kleur.dim(`${i + 1}. ${content.source.hostname || 'unknown'}`));
+    console.log(kleur.dim(`   ${content.source.url}\n`));
   });
 
   // Step 3: Generate blog post outline
