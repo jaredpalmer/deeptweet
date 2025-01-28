@@ -11,7 +11,6 @@ import { findSimilarSentences } from './find-similar-sentences';
 import { generateQuery } from './generate-query';
 import { chunk } from './utils';
 import { BlogPost } from './schemas';
-import { researchAgents } from './agents';
 import fs from 'fs/promises';
 import { sanitizeFilename } from './utils/filename';
 
@@ -369,68 +368,7 @@ async function research(topic: string): Promise<BlogPost> {
   await writeBlogPostMarkdown(improved, topic, improvedPath);
   console.log(kleur.dim(`Wrote improved version to ${improvedPath}`));
 
-  // Step 7: Expert Review & Improvements
-  console.log(kleur.dim('\nPhase 5: Expert Review'));
-  console.log(kleur.dim('─'.repeat(30)));
-
-  const agentAnalyses = await Promise.all(
-    researchAgents.map(async (agent) => {
-      process.stdout.write(kleur.dim(`${agent.name}... `));
-      process.stdout.write(kleur.green('✓ '));
-      const feedback = await agent.analyze(JSON.stringify(improved));
-      return {
-        agent: agent.name,
-        feedback,
-      };
-    })
-  );
-
-  // Consolidate agent feedback
-  const { text: consolidatedFeedback } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content: `You are a senior editor. Review the expert feedback and provide specific improvements needed. Focus on:
-1. Business value improvements suggested by BusinessValueAnalyst
-2. Technical accuracy issues found by FactChecker
-3. Areas needing more depth from DepthAnalyst
-4. Narrative improvements from Synthesizer`,
-      },
-      {
-        role: 'user',
-        content: `Expert feedback:\n${agentAnalyses
-          .map((a) => `${a.agent}:\n${a.feedback}\n`)
-          .join('\n')}`,
-      },
-    ],
-  });
-
-  // Apply improvements based on agent feedback
-  console.log(kleur.dim('Applying expert suggestions...'));
-  const { object: expertImproved } = await generateObject({
-    model: openai('gpt-4o-mini'),
-    schema: blogPostSchema,
-    messages: [
-      {
-        role: 'system',
-        content: `Improve this blog post based on expert feedback. Make sure to:
-1. Strengthen business value and strategic insights
-2. Fix any technical inaccuracies
-3. Add depth where recommended
-4. Improve narrative flow and connections
-Keep all citations and maintain the overall structure.`,
-      },
-      {
-        role: 'user',
-        content: `Original post:\n${JSON.stringify(
-          improved
-        )}\n\nExpert feedback:\n${consolidatedFeedback}`,
-      },
-    ],
-  });
-
-  console.log(kleur.dim('\nPhase 6: Final Polish'));
+  console.log(kleur.dim('\nPhase 5: Final Polish'));
   console.log(kleur.dim('─'.repeat(30)));
   process.stdout.write(kleur.dim('Improving flow... '));
   const { object: final } = await generateObject({
@@ -448,20 +386,13 @@ Keep all technical content and citations intact.`,
       },
       {
         role: 'user',
-        content: JSON.stringify(expertImproved),
+        content: JSON.stringify(improved),
       },
     ],
   });
 
   process.stdout.write(kleur.green('✓\n'));
 
-  // Write expert improved version to file
-  const expertPath = path.join(
-    'output',
-    `${sanitizeFilename(topic)}-4-expert-improved.md`
-  );
-  await writeBlogPostMarkdown(expertImproved, topic, expertPath);
-  console.log(kleur.dim(`Wrote expert improved version to ${expertPath}`));
 
   console.log(kleur.bold().green('\n✨ Blog Post Generated Successfully! ✨'));
   console.log(kleur.dim('═'.repeat(50)));
