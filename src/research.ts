@@ -1,6 +1,6 @@
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
 import kleur from 'kleur';
 import 'dotenv/config';
