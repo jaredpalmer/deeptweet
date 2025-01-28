@@ -7,6 +7,7 @@ import kleur from 'kleur';
 import PQueue from 'p-queue';
 import Table from 'cli-table3';
 import readline from 'readline';
+import { generateQuery } from './generate-query.js';
 
 interface Event {
   type: EventType;
@@ -384,7 +385,11 @@ async function prioritizeInsight(insight: string): Promise<number> {
   return score;
 }
 
-async function researchTopic(topic: string, isSubTopic: boolean = false): Promise<{ tweetThread: string; insights: Insight[] } | void> {
+async function researchTopic(
+  topic: string,
+  isSubTopic: boolean = false,
+  parentTopic?: string
+): Promise<{ tweetThread: string; insights: Insight[] } | void> {
   const startTime = Date.now();
 
   if (!isSubTopic) {
@@ -402,9 +407,19 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
   const taskId = logger.startTask(`🔬 Researching: ${topic}`);
   logger.log(''); // Add spacing
 
-  logger.info('🔍 Searching Google...');
+  logger.info('🔍 Generating optimized search query...');
   try {
-    searchResults = await searchGoogle(topic);
+    const messages = [
+      {
+        role: 'user',
+        content: parentTopic 
+          ? `This is related to "${parentTopic}". I want to learn about: ${topic}`
+          : topic
+      }
+    ];
+    const searchQuery = await generateQuery(messages);
+    logger.info(`🔍 Searching for: ${searchQuery}`);
+    searchResults = await searchGoogle(searchQuery);
     urls = [
       ...new Set(
         searchResults
@@ -446,7 +461,7 @@ async function researchTopic(topic: string, isSubTopic: boolean = false): Promis
 
         for (const newTopic of newTopics) {
           await new Promise((resolve) => setTimeout(resolve, 500));
-          researchQueue.add(() => researchTopic(newTopic, true));
+          researchQueue.add(() => researchTopic(newTopic, true, topic));
         }
       }
     } else {
