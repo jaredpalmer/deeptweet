@@ -42,11 +42,35 @@ const MAX_N_CHUNKS = 100;
 const CHUNK_CHAR_LENGTH = 400;
 const DOMAIN_BLOCKLIST = ['youtube.com', 'facebook.com', 'twitter.com', 'instagram.com'];
 
+interface Source {
+  url: string;
+  title?: string;
+  content: string;
+  relevance: number;
+}
+
+interface Section {
+  title: string;
+  content: string;
+  sources: Source[];
+  subsections?: Section[];
+}
+
+interface ResearchPaper {
+  title: string;
+  abstract: string;
+  introduction: string;
+  sections: Section[];
+  conclusion: string;
+  references: Source[];
+}
+
 interface Insight {
   topic: string;
   summary: string;
   score: number;
   url: string;
+  source?: Source;
 }
 
 type TaskId = string;
@@ -368,22 +392,113 @@ async function summarizeContent(content: string): Promise<string> {
   return text;
 }
 
-async function generateTweetThread(research: string): Promise<string> {
-  const { text } = await generateText({
+async function generateResearchPaper(topic: string, insights: Insight[], sources: Source[]): Promise<ResearchPaper> {
+  // Generate outline
+  const { text: outlineText } = await generateText({
     model: openai('gpt-4o'),
     messages: [
       {
         role: 'system',
-        content:
-          "You are a Twitter Thread Creator. Create a compelling thread from the research provided. Each tweet must be under 280 characters. Create 5-7 tweets that tell an engaging story about the topic. Format each tweet on a new line starting with a number and period (e.g. '1. First tweet').",
+        content: 'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
       },
       {
         role: 'user',
-        content: research,
+        content: `Topic: ${topic}\n\nKey insights:\n${insights.map(i => `- ${i.summary}`).join('\n')}`,
       },
     ],
   });
-  return text;
+
+  // Generate abstract
+  const { text: abstract } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
+      },
+      {
+        role: 'user',
+        content: `Topic: ${topic}\n\nKey insights:\n${insights.map(i => `- ${i.summary}`).join('\n')}`,
+      },
+    ],
+  });
+
+  // Generate introduction
+  const { text: introduction } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
+      },
+      {
+        role: 'user',
+        content: `Topic: ${topic}\n\nOutline:\n${outlineText}\n\nAbstract:\n${abstract}`,
+      },
+    ],
+  });
+
+  // Parse outline into sections
+  const sections = await generateSections(outlineText, insights, sources);
+
+  // Generate conclusion
+  const { text: conclusion } = await generateText({
+    model: openai('gpt-4o'),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
+      },
+      {
+        role: 'user',
+        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections.map(s => s.title).join('\n')}`,
+      },
+    ],
+  });
+
+  return {
+    title: `${topic}: A Comprehensive Analysis`,
+    abstract,
+    introduction,
+    sections,
+    conclusion,
+    references: sources
+  };
+}
+
+async function generateSections(outline: string, insights: Insight[], sources: Source[]): Promise<Section[]> {
+  const sections: Section[] = [];
+  const outlineLines = outline.split('\n').filter(Boolean);
+  
+  for (const line of outlineLines) {
+    if (!line.startsWith('  ')) { // Main section
+      const { text: sectionContent } = await generateText({
+        model: openai('gpt-4o'),
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
+          },
+          {
+            role: 'user',
+            content: `Section title: ${line}\n\nRelevant insights:\n${insights
+              .filter(i => i.summary.toLowerCase().includes(line.toLowerCase()))
+              .map(i => `- ${i.summary} (${i.url})`)
+              .join('\n')}`,
+          },
+        ],
+      });
+
+      sections.push({
+        title: line.replace(/^\d+\.\s*/, ''),
+        content: sectionContent,
+        sources: sources.filter(s => sectionContent.includes(s.url)),
+        subsections: []
+      });
+    }
+  }
+
+  return sections;
 }
 
 async function prioritizeInsight(insight: string): Promise<number> {
@@ -516,36 +631,48 @@ async function researchTopic(
       })
       .join('\n\n');
 
-    tweetThread = await generateTweetThread(topInsights);
-    logger.success('🔄 Research processing completed');
-  }
+    const sources = summaries.map(s => ({
+      url: s.url,
+      content: s.summary,
+      relevance: researchInsights.find(i => i.url === s.url)?.score || 5
+    }));
 
-  if (!isSubTopic) {
-    logger.success(`✨ Completed research: ${topic}`);
+    const paper = await generateResearchPaper(topic, researchInsights, sources);
+    logger.success('🔄 Research paper generated');
 
-    console.log(kleur.bold().cyan('\n📊 Summary'));
+    // Display paper
+    console.log(kleur.bold().cyan('\n📑 Research Paper'));
     console.log(kleur.dim('─'.repeat(40)));
-    console.log(kleur.blue(`› Topic: ${topic}`));
-    const relatedTopics = Array.from(discoveredTopics).slice(1);
-    if (relatedTopics.length) {
-      console.log(
-        kleur.blue(
-          `› Related: ${relatedTopics.slice(0, 3).join(', ')}${
-            relatedTopics.length > 3 ? '...' : ''
-          }`
-        )
-      );
+    console.log(kleur.bold().blue(paper.title));
+    console.log();
+    console.log(kleur.bold('Abstract'));
+    console.log(kleur.dim('─'.repeat(20)));
+    console.log(paper.abstract);
+    console.log();
+    console.log(kleur.bold('Introduction'));
+    console.log(kleur.dim('─'.repeat(20)));
+    console.log(paper.introduction);
+    
+    for (const section of paper.sections) {
+      console.log();
+      console.log(kleur.bold(section.title));
+      console.log(kleur.dim('─'.repeat(20)));
+      console.log(section.content);
     }
-    console.log(kleur.blue(`› Insights: ${researchInsights.length}`));
-    console.log(kleur.dim('─'.repeat(40)));
 
-    displayInsightsTable(researchInsights);
+    console.log();
+    console.log(kleur.bold('Conclusion'));
+    console.log(kleur.dim('─'.repeat(20)));
+    console.log(paper.conclusion);
 
-    console.log(kleur.bold().cyan('\n🧵 Tweet Thread'));
-    console.log(kleur.dim('─'.repeat(40)));
-    console.log(kleur.blue(tweetThread || ''));
+    console.log();
+    console.log(kleur.bold('References'));
+    console.log(kleur.dim('─'.repeat(20)));
+    paper.references.forEach((ref, i) => {
+      console.log(`[${i + 1}] ${ref.url}`);
+    });
 
-    return { tweetThread: tweetThread || '', insights: researchInsights };
+    return { paper, insights: researchInsights };
   }
 }
 
