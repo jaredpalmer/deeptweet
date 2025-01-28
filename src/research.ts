@@ -62,41 +62,85 @@ async function research(topic: string): Promise<BlogPost> {
   console.log(kleur.dim('─'.repeat(30)));
   
   // Run searches and web parsing concurrently
-  const allResults = await Promise.all(queries.map(searchGoogle));
+  process.stdout.write(kleur.dim('Searching Google... '));
+  const allResults = await Promise.all(
+    queries.map(async (query, i) => {
+      const results = await searchGoogle(query);
+      process.stdout.write(`${kleur.green('✓')}${i < queries.length - 1 ? ', ' : '\n'}`);
+      return results;
+    })
+  );
   const uniqueUrls = new Set(allResults.flat().map((result) => result.link));
+  console.log(kleur.dim(`Found ${uniqueUrls.size} unique sources to analyze`));
   
   // Process in batches of 5 to avoid rate limits
   const urlBatches = chunk(Array.from(uniqueUrls), 5);
   const contents = [];
+  let successCount = 0;
+  let failCount = 0;
   
+  console.log(kleur.dim('Processing sources:'));
   for (const batch of urlBatches) {
-    const batchResults = await Promise.all(batch.map((url: string) => parseWeb(url)));
+    const batchResults = await Promise.all(
+      batch.map(async (url: string) => {
+        process.stdout.write(kleur.dim(`  ${url.slice(0, 60)}... `));
+        try {
+          const result = await parseWeb(url);
+          if (result.chunks.length > 0) {
+            process.stdout.write(kleur.green('✓\n'));
+            successCount++;
+          } else {
+            process.stdout.write(kleur.yellow('empty\n'));
+            failCount++;
+          }
+          return result;
+        } catch (error) {
+          process.stdout.write(kleur.red('failed\n'));
+          failCount++;
+          return { url, chunks: [] };
+        }
+      })
+    );
     contents.push(...batchResults);
-    process.stdout.write(`\r${kleur.dim(`Processed ${contents.length}/${uniqueUrls.size} sources...`)}`);
   }
 
-  console.log(kleur.green(`✓ Found ${uniqueUrls.size} unique sources`));
+  console.log(kleur.dim('\nSource processing complete:'));
+  console.log(kleur.dim(`• ${successCount} sources processed successfully`));
+  console.log(kleur.dim(`• ${failCount} sources failed or were empty`));
 
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('\nPhase 2: Content Analysis'));
   console.log(kleur.dim('─'.repeat(30)));
 
   // Process chunks
-  process.stdout.write(kleur.dim('Processing content chunks... '));
+  process.stdout.write(kleur.dim('Analyzing content... '));
   const allSentences = contents.flatMap((content) => {
-    return content.chunks
+    const validChunks = content.chunks
       .filter((s) => s.trim().length > 50) // Filter out short chunks
       .map((chunk) => ({
         text: chunk,
         source: {
           url: content.url,
-          title: content.title,
-          hostname: content.hostname,
+          title: content.title || 'Untitled',
+          hostname: content.hostname || new URL(content.url).hostname,
         },
       }));
+    
+    if (validChunks.length > 0) {
+      process.stdout.write(kleur.dim('.'));
+    }
+    return validChunks;
   });
-  process.stdout.write(kleur.green('✓\n'));
-  console.log(kleur.dim(`Found ${allSentences.length} content chunks`));
+  process.stdout.write(kleur.green(' done\n'));
+  
+  const stats = {
+    totalChunks: allSentences.length,
+    avgChunkLength: Math.round(
+      allSentences.reduce((acc, s) => acc + s.text.length, 0) / allSentences.length
+    ),
+  };
+  
+  console.log(kleur.dim(`Found ${stats.totalChunks} content chunks (avg length: ${stats.avgChunkLength} chars)`));
 
   // Find most relevant content
   process.stdout.write(kleur.dim('Analyzing relevance with embeddings... '));
