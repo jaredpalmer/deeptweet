@@ -1,9 +1,6 @@
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
-import { chunk } from '../utils';
-
-const MAX_N_CHUNKS = 100;
-const CHUNK_CHAR_LENGTH = 400;
+import { chunkText, cleanText, ChunkOptions } from '../utils/text';
 
 import { WebContent } from '../types';
 
@@ -68,13 +65,7 @@ export async function parseWeb(url: string): Promise<WebContent> {
   const textContents = textElements
     .map(el => el.textContent?.trim())
     .filter(Boolean)
-    .map(text => 
-      text
-        .replace(/\s+/g, ' ')           // Normalize whitespace
-        .replace(/[^\S\r\n]+/g, ' ')    // Convert multiple spaces to single
-        .replace(/\n{2,}/g, '\n')       // Normalize line breaks
-        .trim()
-    );
+    .map(cleanText);
 
   // Combine all text
   const text = textContents.join(' ').trim();
@@ -82,10 +73,16 @@ export async function parseWeb(url: string): Promise<WebContent> {
   // Return empty array if no meaningful content found
   if (!text) {
     console.warn(`No text content found for ${url}`);
-    return [];
+    return { url, chunks: [] };
   }
 
-  const chunks = chunk(text, CHUNK_CHAR_LENGTH).slice(0, MAX_N_CHUNKS);
+  // Create semantic chunks with overlap
+  const chunks = chunkText(text, {
+    chunkSize: 500,    // Slightly larger chunks
+    overlap: 100,      // 100 char overlap between chunks
+    minLength: 50,     // Min length for meaningful chunks
+    maxChunks: 100     // Limit total chunks
+  });
   
   try {
     const { hostname } = new URL(url);
