@@ -36,8 +36,7 @@ export const blogPostSchema = z.object({
   metadata: z.object({
     reading_time: z.number(),
     technical_level: z.number().min(1).max(5),
-    business_impact: z.number().min(1).max(5),
-    seo_score: z.number().min(1).max(100)
+    business_impact: z.number().min(1).max(5)
   })
 });
 

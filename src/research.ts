@@ -193,13 +193,6 @@ async function research(topic: string): Promise<BlogPost> {
   });
 
   console.log(kleur.green('✓ Blog post generated!'));
-  // Analyze SEO and content quality
-  const seoAnalysis = await analyzeSEO(
-    `${improved.title}\n${improved.summary}\n${improved.sections
-      .map(s => s.content)
-      .join('\n')}\n${improved.conclusion}`
-  );
-
   // Calculate reading time (rough estimate: 200 words per minute)
   const wordCount = improved.sections
     .map(s => s.content.split(/\s+/).length)
@@ -221,11 +214,8 @@ async function research(topic: string): Promise<BlogPost> {
       business_impact: Math.round(
         improved.sections.reduce((acc, s) => acc + s.business_value, 0) /
           improved.sections.length
-      ),
-      seo_score: seoAnalysis.overall_score
-    },
-    keywords: seoAnalysis.keywords,
-    meta: generateMetaTags(seoAnalysis)
+      )
+    }
   };
 }
 
