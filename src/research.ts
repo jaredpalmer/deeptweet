@@ -101,21 +101,6 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
     .slice(0, MAX_N_PAGES_SCRAPE);
 }
 
-async function extractContent(url: string): Promise<string> {
-  try {
-    const response = await fetch(url);
-    const html = await response.text();
-    const dom = new JSDOM(html);
-    const paragraphs = dom.window.document.querySelectorAll('p');
-    return Array.from(paragraphs)
-      .map((p) => p.textContent)
-      .filter(Boolean)
-      .join('\n');
-  } catch (error) {
-    console.error(`Failed to extract content from ${url}`);
-    return '';
-  }
-}
 
 import { findSimilarSentences } from './find-similar-sentences';
 import { generateQuery } from './generate-query';
@@ -153,7 +138,7 @@ async function research(topic: string): Promise<BlogPost> {
 
   const contents = await Promise.all(
     Array.from(uniqueUrls).map(async (url) => ({
-      content: await extractContent(url),
+      chunks: await parseWeb(url),
       url,
     }))
   );
@@ -161,9 +146,8 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('Analyzing relevance...'));
   const allSentences = contents
-    .map((c) => c.content.split(/[.!?]+/))
-    .flat()
-    .filter((s) => s.trim().length > 50); // Filter out short sentences
+    .flatMap(c => c.chunks)
+    .filter((s) => s.trim().length > 50); // Filter out short chunks
 
   const topSentenceIndices = await findSimilarSentences(topic, allSentences, {
     topK: 10,
