@@ -10,6 +10,7 @@ import readline from 'readline';
 import { generateQuery } from './generate-query.js';
 import { chunk } from './utils.js';
 import { findSimilarSentences } from './find-similar-sentences.js';
+import { critiquePaper, improveSection } from './agents.js';
 
 interface Event {
   type: EventType;
