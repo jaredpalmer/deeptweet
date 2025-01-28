@@ -63,23 +63,15 @@ async function research(topic: string): Promise<BlogPost> {
   console.log(kleur.dim('─'.repeat(30)));
   
   // Run searches and web parsing concurrently
-  const [allResults, initialEmbedding] = await Promise.all([
-    Promise.all(queries.map(searchGoogle)),
-    // Start embedding the topic early
-    embedMany({
-      model: openai.embedding('text-embedding-3-small'),
-      values: [topic],
-    })
-  ]);
-
-  const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
+  const allResults = await Promise.all(queries.map(searchGoogle));
+  const uniqueUrls = new Set(allResults.flat().map((result) => result.link));
   
   // Process in batches of 5 to avoid rate limits
   const urlBatches = chunk(Array.from(uniqueUrls), 5);
   const contents = [];
   
   for (const batch of urlBatches) {
-    const batchResults = await Promise.all(batch.map(parseWeb));
+    const batchResults = await Promise.all(batch.map((url: string) => parseWeb(url)));
     contents.push(...batchResults);
     process.stdout.write(`\r${kleur.dim(`Processed ${contents.length}/${uniqueUrls.size} sources...`)}`);
   }
@@ -270,19 +262,29 @@ async function research(topic: string): Promise<BlogPost> {
   process.stdout.write(kleur.dim('Starting initial polish... '));
 
   // Break down the content for more manageable processing
-  type ContentPart = 
-    | { type: 'section'; title: string; content: string }
-    | { type: 'title' | 'summary' | 'conclusion'; content: string };
+  type ContentPartType = 'section' | 'title' | 'summary' | 'conclusion';
+  
+  interface BaseContentPart {
+    type: ContentPartType;
+    content: string;
+  }
+
+  interface SectionContentPart extends BaseContentPart {
+    type: 'section';
+    title: string;
+  }
+
+  type ContentPart = SectionContentPart | (BaseContentPart & { type: Exclude<ContentPartType, 'section'> });
 
   const contentParts: ContentPart[] = [
-    { type: 'title', content: outline.title },
-    { type: 'summary', content: summary },
+    { type: 'title' as const, content: outline.title },
+    { type: 'summary' as const, content: summary },
     ...sections.map((s) => ({
-      type: 'section',
+      type: 'section' as const,
       title: s.title,
       content: s.content,
     })),
-    { type: 'conclusion', content: conclusion },
+    { type: 'conclusion' as const, content: conclusion },
   ];
 
   // Process parts in parallel batches with error handling
