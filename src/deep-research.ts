@@ -9,6 +9,7 @@ import Table from 'cli-table3';
 import readline from 'readline';
 import { generateQuery } from './generate-query.js';
 import { chunk } from './utils.js';
+import { findSimilarSentences } from './find-similar-sentences.js';
 
 interface Event {
   type: EventType;
