@@ -52,17 +52,25 @@ async function research(topic: string): Promise<BlogPost> {
   const uniqueUrls = new Set(allResults.flat().map((r) => r.link));
 
   const contents = await Promise.all(
-    Array.from(uniqueUrls).map(async (url) => ({
-      chunks: await parseWeb(url),
-      url,
-    }))
+    Array.from(uniqueUrls).map(parseWeb)
   );
 
   // Step 2.5: Find most relevant content using embeddings
   console.log(kleur.dim('Analyzing relevance...'));
-  const allSentences = contents
-    .flatMap((c) => c.chunks)
-    .filter((s) => s.trim().length > 50); // Filter out short chunks
+  const allSentences = contents.flatMap(content => {
+    return content.chunks
+      .filter(s => s.trim().length > 50) // Filter out short chunks
+      .map(chunk => ({
+        text: chunk,
+        source: {
+          url: content.url,
+          title: content.title,
+          hostname: content.hostname
+        }
+      }));
+  });
+
+  const sentences = allSentences.map(s => s.text);
 
   const topSentenceIndices = await findSimilarSentences(topic, sentences, {
     topK: 10,
