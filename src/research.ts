@@ -9,16 +9,7 @@ import { searchGoogle } from './web/search';
 import { findSimilarSentences } from './find-similar-sentences';
 import { generateQuery } from './generate-query';
 import { chunk } from './utils';
-interface BlogPost {
-  title: string;
-  summary: string;
-  sections: {
-    title: string;
-    content: string;
-    sources: string[];
-  }[];
-  conclusion: string;
-}
+import { BlogPost } from './schemas';
 
 const MAX_N_PAGES_EMBED = 5;
 
@@ -195,28 +186,25 @@ async function research(topic: string): Promise<BlogPost> {
 
   console.log(kleur.green('✓ Blog post generated!'));
   // Calculate reading time (rough estimate: 200 words per minute)
-  const wordCount = improved.sections
-    .map(s => s.content.split(/\s+/).length)
-    .reduce((a, b) => a + b, 0);
+  const wordCount = improved.content
+    .map(block => block.text.split(/\s+/).length)
+    .reduce((a: number, b: number) => a + b, 0);
   const readingTime = Math.ceil(wordCount / 200);
 
   return {
     ...improved,
-    sections: improved.sections.map((s) => ({
-      ...s,
-      sources: sourceList,
-    })),
+    content: improved.content,
+    subtitle: improved.subtitle,
     metadata: {
       reading_time: readingTime,
-      technical_level: Math.round(
-        improved.sections.reduce((acc, s) => acc + s.technical_depth, 0) /
-          improved.sections.length
-      ),
-      business_impact: Math.round(
-        improved.sections.reduce((acc, s) => acc + s.business_value, 0) /
-          improved.sections.length
-      )
-    }
+      technical_level: 3, // Default mid-level
+      business_impact: 3  // Default mid-level
+    },
+    references: sourceList.map(url => ({
+      url,
+      title: "Reference",
+      site: new URL(url).hostname
+    }))
   };
 }
 

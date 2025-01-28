@@ -11,7 +11,7 @@ export async function parseWeb(url: string): Promise<WebContent> {
     .then((response) => response.text())
     .catch(() => null);
 
-  if (!htmlString) return [];
+  if (!htmlString) return { url, chunks: [] };
 
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('error', () => {
@@ -56,7 +56,7 @@ export async function parseWeb(url: string): Promise<WebContent> {
     let node;
     while ((node = walker.nextNode())) {
       if (node.textContent?.trim()) {
-        textElements.push(node);
+        textElements.push(node.parentElement || document.createElement('div'));
       }
     }
   }
@@ -65,7 +65,7 @@ export async function parseWeb(url: string): Promise<WebContent> {
   const textContents = textElements
     .map(el => el.textContent?.trim())
     .filter(Boolean)
-    .map(cleanText);
+    .map(text => text ? cleanText(text) : '');
 
   // Combine all text
   const text = textContents.join(' ').trim();
