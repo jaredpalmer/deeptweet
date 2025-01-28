@@ -415,52 +415,51 @@ async function summarizeContent(content: string): Promise<string> {
 async function generateResearchPaper(
   topic: string,
   insights: Insight[],
-  sources: Source[]
+  sources: Source[],
+  logger: Logger
 ): Promise<ResearchPaper> {
-  // Generate outline
-  const { text: outlineText } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
-      },
-      {
-        role: 'user',
-        content: `Topic: ${topic}\n\nKey insights:\n${insights
-          .map((i) => `- ${i.summary}`)
-          .join('\n')}`,
-      },
-    ],
-  });
+  logger.info('📝 Generating paper outline...');
+  
+  // Generate outline, abstract, and introduction in parallel
+  const [outlineResult, abstractResult] = await Promise.all([
+    generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a research paper outline generator. Create a detailed outline for an academic paper on the given topic. Include main sections and subsections. Format as a hierarchical list.',
+        },
+        {
+          role: 'user',
+          content: `Topic: ${topic}\n\nKey insights:\n${insights.map((i) => `- ${i.summary}`).join('\n')}`,
+        },
+      ],
+    }),
+    generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
+        },
+        {
+          role: 'user',
+          content: `Topic: ${topic}\n\nKey insights:\n${insights.map((i) => `- ${i.summary}`).join('\n')}`,
+        },
+      ],
+    })
+  ]);
 
-  // Generate abstract
-  const { text: abstract } = await generateText({
-    model: openai('gpt-4o-mini'),
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are a research paper abstract writer. Write a compelling abstract that summarizes the key findings and importance of this research.',
-      },
-      {
-        role: 'user',
-        content: `Topic: ${topic}\n\nKey insights:\n${insights
-          .map((i) => `- ${i.summary}`)
-          .join('\n')}`,
-      },
-    ],
-  });
+  const outlineText = outlineResult.text;
+  const abstract = abstractResult.text;
 
-  // Generate introduction
+  logger.info('📝 Generating introduction...');
   const { text: introduction } = await generateText({
     model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content:
-          'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
+        content: 'You are a research paper introduction writer. Write an engaging introduction that sets up the topic, provides background, and outlines the paper structure.',
       },
       {
         role: 'user',
@@ -469,27 +468,25 @@ async function generateResearchPaper(
     ],
   });
 
-  // Parse outline into sections
-  const sections = await generateSections(outlineText, insights, sources);
+  logger.info('📝 Generating paper sections...');
+  const sections = await generateSections(outlineText, insights, sources, logger);
 
-  // Generate conclusion
+  logger.info('📝 Generating conclusion...');
   const { text: conclusion } = await generateText({
     model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
-        content:
-          'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
+        content: 'You are a research paper conclusion writer. Summarize the key findings, implications, and future directions.',
       },
       {
         role: 'user',
-        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections
-          .map((s) => s.title)
-          .join('\n')}`,
+        content: `Topic: ${topic}\n\nIntroduction:\n${introduction}\n\nKey sections:\n${sections.map((s) => s.title).join('\n')}`,
       },
     ],
   });
 
+  logger.success('✨ Paper structure complete');
   return {
     title: `${topic}: A Comprehensive Analysis`,
     abstract,
@@ -503,42 +500,53 @@ async function generateResearchPaper(
 async function generateSections(
   outline: string,
   insights: Insight[],
-  sources: Source[]
+  sources: Source[],
+  logger: Logger
 ): Promise<Section[]> {
   const sections: Section[] = [];
   const outlineLines = outline.split('\n').filter(Boolean);
-
-  for (const line of outlineLines) {
-    if (!line.startsWith('  ')) {
-      // Main section
+  const mainSections = outlineLines.filter(line => !line.startsWith('  '));
+  
+  logger.info(`📑 Processing ${mainSections.length} main sections...`);
+  
+  // Process sections in parallel with a concurrency limit
+  const sectionQueue = new PQueue({ concurrency: 2 });
+  
+  const sectionPromises = mainSections.map((line, index) => {
+    return sectionQueue.add(async () => {
+      logger.info(`📄 Generating section ${index + 1}/${mainSections.length}: ${line.replace(/^\d+\.\s*/, '')}`);
+      
       const { text: sectionContent } = await generateText({
         model: openai('gpt-4o-mini'),
         messages: [
           {
             role: 'system',
-            content:
-              'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
+            content: 'You are a research paper section writer. Write a detailed section incorporating relevant insights and citing sources.',
           },
           {
             role: 'user',
             content: `Section title: ${line}\n\nRelevant insights:\n${insights
-              .filter((i) =>
-                i.summary.toLowerCase().includes(line.toLowerCase())
-              )
+              .filter((i) => i.summary.toLowerCase().includes(line.toLowerCase()))
               .map((i) => `- ${i.summary} (${i.url})`)
               .join('\n')}`,
           },
         ],
       });
 
-      sections.push({
+      const section = {
         title: line.replace(/^\d+\.\s*/, ''),
         content: sectionContent,
         sources: sources.filter((s) => sectionContent.includes(s.url)),
         subsections: [],
-      });
-    }
-  }
+      };
+
+      logger.success(`✓ Completed section: ${section.title}`);
+      return section;
+    });
+  });
+
+  const completedSections = await Promise.all(sectionPromises);
+  sections.push(...completedSections);
 
   return sections;
 }
@@ -669,8 +677,7 @@ async function researchTopic(
     }));
 
     logger.info('📝 Generating research paper...');
-    const paper = await generateResearchPaper(topic, researchInsights, sources);
-    logger.success('✨ Research paper generated');
+    const paper = await generateResearchPaper(topic, researchInsights, sources, logger);
 
     // Display paper with better formatting
     console.log('\n' + kleur.bold().cyan('╭─────────────────────────────────╮'));
