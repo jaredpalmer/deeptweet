@@ -277,7 +277,7 @@ async function research(topic: string): Promise<BlogPost> {
           role: 'user',
           content:
             part.type === 'section'
-              ? `${part.title}\n\n${
+              ? `${(part as { title: string }).title}\n\n${
                   part.content
                 }\n\nAvailable sources:\n${sourceList.join('\n')}`
               : `${part.content}\n\nAvailable sources:\n${sourceList.join(
