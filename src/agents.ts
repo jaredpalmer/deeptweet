@@ -13,7 +13,41 @@ export interface ResearchAgent {
   analyze: (content: string) => Promise<string>;
 }
 
+export interface AgentScore {
+  score: number;
+  rationale: string;
+}
+
+export interface AgentAnalysis {
+  feedback: string;
+  suggestions: string[];
+  scores: {
+    technical_accuracy: AgentScore;
+    business_value: AgentScore;
+    engagement: AgentScore;
+    actionability: AgentScore;
+    depth: AgentScore;
+  };
+}
+
 export const researchAgents: ResearchAgent[] = [
+  {
+    name: 'BusinessValueAnalyst',
+    role: 'You are a business strategy expert. Your job is to ensure the content provides clear, actionable business value and strategic insights.',
+    analyze: async (content: string) => {
+      const { text } = await generateText({
+        model: openai('gpt-4o'),
+        messages: [
+          {
+            role: 'system',
+            content: 'Review the content for business value. Identify opportunities to strengthen ROI discussion, strategic implications, and practical applications.'
+          },
+          { role: 'user', content }
+        ]
+      });
+      return text;
+    }
+  },
   {
     name: 'FactChecker',
     role: 'You are a meticulous fact checker. Your job is to verify claims, identify potential inaccuracies, and ensure all statements are well-supported by evidence.',
