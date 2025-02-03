@@ -14,8 +14,6 @@ import { BlogPost } from './schemas';
 import fs from 'fs/promises';
 import { sanitizeFilename } from './utils/filename';
 
-const MAX_N_PAGES_EMBED = 5;
-
 async function research(topic: string): Promise<BlogPost> {
   console.log(
     kleur.bold().blue('\n🔍 Starting Research: ') + kleur.bold(topic)
@@ -60,25 +58,27 @@ async function research(topic: string): Promise<BlogPost> {
   // Step 2: Search and extract content in parallel
   console.log(kleur.dim('\nPhase 1: Content Discovery'));
   console.log(kleur.dim('─'.repeat(30)));
-  
+
   // Run searches and web parsing concurrently
   process.stdout.write(kleur.dim('Searching Google... '));
   const allResults = await Promise.all(
     queries.map(async (query, i) => {
       const results = await searchGoogle(query);
-      process.stdout.write(`${kleur.green('✓')}${i < queries.length - 1 ? ', ' : '\n'}`);
+      process.stdout.write(
+        `${kleur.green('✓')}${i < queries.length - 1 ? ', ' : '\n'}`
+      );
       return results;
     })
   );
   const uniqueUrls = new Set(allResults.flat().map((result) => result.link));
   console.log(kleur.dim(`Found ${uniqueUrls.size} unique sources to analyze`));
-  
+
   // Process in batches of 5 to avoid rate limits
   const urlBatches = chunk(Array.from(uniqueUrls), 5);
   const contents = [];
   let successCount = 0;
   let failCount = 0;
-  
+
   console.log(kleur.dim('Processing sources:'));
   for (const batch of urlBatches) {
     const batchResults = await Promise.all(
@@ -113,23 +113,23 @@ async function research(topic: string): Promise<BlogPost> {
   console.log(kleur.dim('─'.repeat(30)));
 
   // Combine all content
-  const allContent = contents.map(content => ({
+  const allContent = contents.map((content) => ({
     text: content.chunks.join('\n\n'),
     source: {
       url: content.url,
       title: content.title || 'Untitled',
       hostname: content.hostname || new URL(content.url).hostname,
-    }
+    },
   }));
 
   // Track sources
   const sourceList = allContent
-    .map(content => content.source.url)
+    .map((content) => content.source.url)
     .filter(Boolean);
 
   // Combine all content into one string
   const mostRelevantContent = allContent
-    .map(content => content.text)
+    .map((content) => content.text)
     .join('\n\n');
 
   console.log(kleur.dim(`Processing ${allContent.length} sources...`));
@@ -145,7 +145,7 @@ async function research(topic: string): Promise<BlogPost> {
   // Show summary
   console.log(kleur.dim('\nContent Analysis Summary:'));
   console.log(kleur.dim('• ') + `${sourceList.length} sources processed`);
-  
+
   // Show preview of first 2 sources
   console.log(kleur.dim('\nSource Preview:'));
   allContent.slice(0, 2).forEach((content, i) => {
@@ -184,29 +184,29 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Step 4: Generate sections in parallel batches
   process.stdout.write(kleur.dim('Writing sections... '));
-  
+
   // Process sections in batches of 3 to avoid rate limits
   const sectionBatches = chunk(outline.sections, 3);
   const sections = [];
-  
+
   for (const batch of sectionBatches) {
     const batchResults = await Promise.all(
       batch.map(async (section: any) => {
-      const { text: content } = await generateText({
-        model: openai('gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: `Write a section for a technical blog post. Focus on practical insights and business value.
+        const { text: content } = await generateText({
+          model: openai('gpt-4o-mini'),
+          messages: [
+            {
+              role: 'system',
+              content: `Write a section for a technical blog post. Focus on practical insights and business value.
             Include specific examples and technical details where relevant.
             Key points to cover: ${section.key_points.join(', ')}`,
-          },
-          {
-            role: 'user',
-            content: `Section title: ${section.title}\n\nReference content:\n${mostRelevantContent}`,
-          },
-        ],
-      });
+            },
+            {
+              role: 'user',
+              content: `Section title: ${section.title}\n\nReference content:\n${mostRelevantContent}`,
+            },
+          ],
+        });
 
         return {
           title: section.title,
@@ -216,7 +216,11 @@ async function research(topic: string): Promise<BlogPost> {
       })
     );
     sections.push(...batchResults);
-    process.stdout.write(`\r${kleur.dim(`Generated ${sections.length}/${outline.sections.length} sections...`)}`);
+    process.stdout.write(
+      `\r${kleur.dim(
+        `Generated ${sections.length}/${outline.sections.length} sections...`
+      )}`
+    );
   }
 
   process.stdout.write(kleur.green('✓\n'));
@@ -251,7 +255,7 @@ async function research(topic: string): Promise<BlogPost> {
           content: sections.map((s) => s.content).join('\n\n'),
         },
       ],
-    })
+    }),
   ]);
 
   process.stdout.write(kleur.green('✓\n'));
@@ -264,7 +268,7 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Break down the content for more manageable processing
   type ContentPartType = 'section' | 'title' | 'summary' | 'conclusion';
-  
+
   interface BaseContentPart {
     type: ContentPartType;
     content: string;
@@ -275,7 +279,9 @@ async function research(topic: string): Promise<BlogPost> {
     title: string;
   }
 
-  type ContentPart = SectionContentPart | (BaseContentPart & { type: Exclude<ContentPartType, 'section'> });
+  type ContentPart =
+    | SectionContentPart
+    | (BaseContentPart & { type: Exclude<ContentPartType, 'section'> });
 
   const contentParts: ContentPart[] = [
     { type: 'title' as const, content: outline.title },
@@ -291,7 +297,7 @@ async function research(topic: string): Promise<BlogPost> {
   // Process parts in parallel batches with error handling
   const improvedParts: any[] = [];
   const partBatches = chunk(contentParts, 2); // Process 2 parts at a time
-  
+
   for (const batch of partBatches) {
     const batchResults = await Promise.all(
       batch.map(async (part) => {
@@ -300,31 +306,34 @@ async function research(topic: string): Promise<BlogPost> {
             `\r${kleur.dim(`Polishing ${part.type}...`.padEnd(40))}`
           );
 
-      // Prepare content
-      const content = part.type === 'section'
-        ? `${(part as { title: string }).title}\n\n${part.content}`
-        : part.content;
+          // Prepare content
+          const content =
+            part.type === 'section'
+              ? `${(part as { title: string }).title}\n\n${part.content}`
+              : part.content;
 
-        // Process content
-        const { object: improvedPart } = await generateObject({
-          model: openai('gpt-4o-mini'),
-          schema: blogPostSchema,
-          messages: [
-            {
-              role: 'system',
-              content: `Improve this ${part.type} section. Focus on:
+          // Process content
+          const { object: improvedPart } = await generateObject({
+            model: openai('gpt-4o-mini'),
+            schema: blogPostSchema,
+            messages: [
+              {
+                role: 'system',
+                content: `Improve this ${part.type} section. Focus on:
 1. Clear business value
 2. Technical accuracy
 3. Engaging style
 4. Actionable insights
 5. Add relevant citations using [^1] style footnotes where appropriate`,
-            },
-            {
-              role: 'user',
-              content: `${content}\n\nAvailable sources:\n${sourceList.join('\n')}`,
-            },
-          ],
-        });
+              },
+              {
+                role: 'user',
+                content: `${content}\n\nAvailable sources:\n${sourceList.join(
+                  '\n'
+                )}`,
+              },
+            ],
+          });
 
           return improvedPart;
         } catch (error) {
@@ -333,9 +342,13 @@ async function research(topic: string): Promise<BlogPost> {
         }
       })
     );
-    
+
     improvedParts.push(...batchResults.filter(Boolean)); // Filter out failed parts
-    process.stdout.write(`\r${kleur.dim(`Processed ${improvedParts.length}/${contentParts.length} parts...`)}`);
+    process.stdout.write(
+      `\r${kleur.dim(
+        `Processed ${improvedParts.length}/${contentParts.length} parts...`
+      )}`
+    );
   }
 
   // Combine improved parts
@@ -367,7 +380,11 @@ async function research(topic: string): Promise<BlogPost> {
     'output',
     `${sanitizeFilename(topic)}-3-improved.json`
   );
-  await fs.writeFile(improvedJsonPath, JSON.stringify(improved, null, 2), 'utf-8');
+  await fs.writeFile(
+    improvedJsonPath,
+    JSON.stringify(improved, null, 2),
+    'utf-8'
+  );
   console.log(kleur.dim(`Wrote improved JSON to ${improvedJsonPath}`));
 
   const improvedMdPath = path.join(
@@ -401,7 +418,6 @@ Keep all technical content and citations intact.`,
   });
 
   process.stdout.write(kleur.green('✓\n'));
-
 
   console.log(kleur.bold().green('\n✨ Blog Post Generated Successfully! ✨'));
   console.log(kleur.dim('═'.repeat(50)));

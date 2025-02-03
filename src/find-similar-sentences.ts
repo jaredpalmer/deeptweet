@@ -1,7 +1,6 @@
-import { Embedding } from 'openai/resources';
 import { openai } from '@ai-sdk/openai';
-import { embed, embedMany } from 'ai';
-import { dot } from '@/lib/utils';
+import { embedMany } from 'ai';
+import { dot } from './utils';
 
 // see here: https://github.com/nmslib/hnswlib/blob/359b2ba87358224963986f709e593d799064ace6/README.md?plain=1#L34
 function innerProduct(embeddingA: number[], embeddingB: number[]) {
@@ -19,20 +18,14 @@ export async function findSimilarSentences(
     values: inputs,
   });
 
-  const queryEmbedding: Embedding = embeddings[0];
-  const sentencesEmbeddings: Embedding[] = embeddings.slice(
-    1,
-    inputs.length - 1
-  );
+  const queryEmbedding = embeddings[0];
+  const sentencesEmbeddings = embeddings.slice(1, inputs.length - 1);
 
   const distancesFromQuery: { distance: number; index: number }[] = [
     ...sentencesEmbeddings,
-  ].map((sentenceEmbedding: Embedding, index: number) => {
+  ].map((sentenceEmbedding, index) => {
     return {
-      distance: innerProduct(
-        queryEmbedding.embedding,
-        sentenceEmbedding.embedding
-      ),
+      distance: innerProduct(queryEmbedding, sentenceEmbedding),
       index: index,
     };
   });

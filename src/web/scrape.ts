@@ -26,18 +26,18 @@ export async function parseWeb(url: string): Promise<WebContent> {
   const { document } = dom.window;
   // Try multiple selectors to find text content
   const selectors = [
-    'p',                           // Standard paragraphs
-    'article',                     // Article content
-    '.content',                    // Common content class
-    '[role="main"]',              // Main content area
-    'div > p',                    // Paragraphs in divs
-    '.post-content',              // Blog post content
-    'main',                       // Main content
-    'div:not(:empty)',           // Any non-empty div as fallback
+    'p', // Standard paragraphs
+    'article', // Article content
+    '.content', // Common content class
+    '[role="main"]', // Main content area
+    'div > p', // Paragraphs in divs
+    '.post-content', // Blog post content
+    'main', // Main content
+    'div:not(:empty)', // Any non-empty div as fallback
   ];
 
   let textElements: Element[] = [];
-  
+
   // Try each selector until we find content
   for (const selector of selectors) {
     textElements = Array.from(document.querySelectorAll(selector));
@@ -51,7 +51,7 @@ export async function parseWeb(url: string): Promise<WebContent> {
       NodeFilter.SHOW_TEXT,
       null
     );
-    
+
     textElements = [];
     let node;
     while ((node = walker.nextNode())) {
@@ -63,9 +63,9 @@ export async function parseWeb(url: string): Promise<WebContent> {
 
   // Extract and clean text content
   const textContents = textElements
-    .map(el => el.textContent?.trim())
+    .map((el) => el.textContent?.trim())
     .filter(Boolean)
-    .map(text => text ? cleanText(text) : '');
+    .map((text) => (text ? cleanText(text) : ''));
 
   // Combine all text
   const text = textContents.join(' ').trim();
@@ -78,12 +78,12 @@ export async function parseWeb(url: string): Promise<WebContent> {
 
   // Create semantic chunks with overlap
   const chunks = chunkText(text, {
-    chunkSize: 2000,   // Much larger chunks to capture more context
-    overlap: 200,      // Larger overlap to maintain coherence
-    minLength: 100,    // Increased min length for more meaningful chunks
-    maxChunks: 50      // Fewer but larger chunks
+    chunkSize: 3000, // Much larger chunks to capture more context
+    overlap: 500, // Larger overlap to maintain coherence
+    minLength: 100, // Increased min length for more meaningful chunks
+    maxChunks: 100, // Fewer but larger chunks
   });
-  
+
   try {
     const { hostname } = new URL(url);
     const title = document.title;

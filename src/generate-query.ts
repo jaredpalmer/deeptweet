@@ -77,7 +77,7 @@ Current Question: Where is it being hosted ?`,
   ];
 
   const { text } = await generateText({
-    model: openai('gpt-3.5-turbo'),
+    model: openai('gpt-4o-mini'),
     messages: [
       {
         role: 'system',
