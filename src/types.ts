@@ -1,6 +1,6 @@
 export interface WebContent {
   url: string;
-  chunks: string[];
+  content: string;
   title?: string;
   hostname?: string;
 }

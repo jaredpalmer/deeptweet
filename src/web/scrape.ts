@@ -1,94 +1,121 @@
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fetch from 'node-fetch';
-import { chunkText, cleanText, ChunkOptions } from '../utils/text';
-
+import { cleanText } from '../utils/text';
 import { WebContent } from '../types';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
 
 export async function parseWeb(url: string): Promise<WebContent> {
-  const abortController = new AbortController();
-  setTimeout(() => abortController.abort(), 10000);
-  const htmlString = await fetch(url, { signal: abortController.signal })
-    .then((response) => response.text())
-    .catch(() => null);
+  try {
+    // Fetch with timeout
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), 10000);
 
-  if (!htmlString) return { url, chunks: [] };
+    const response = await fetch(url, { signal: abortController.signal });
+    clearTimeout(timeout);
 
-  const virtualConsole = new VirtualConsole();
-  virtualConsole.on('error', () => {
-    // No-op to skip console errors.
-  });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-  // put the html string into a DOM
-  const dom = new JSDOM(htmlString, {
-    virtualConsole,
-  });
+    const htmlString = await response.text();
+    if (!htmlString) return { url, content: '' };
 
-  const { document } = dom.window;
-  // Try multiple selectors to find text content
-  const selectors = [
-    'p', // Standard paragraphs
-    'article', // Article content
-    '.content', // Common content class
-    '[role="main"]', // Main content area
-    'div > p', // Paragraphs in divs
-    '.post-content', // Blog post content
-    'main', // Main content
-    'div:not(:empty)', // Any non-empty div as fallback
-  ];
+    // Setup virtual console
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on('error', () => {
+      // No-op to skip console errors
+    });
 
-  let textElements: Element[] = [];
+    // Create DOM
+    const dom = new JSDOM(htmlString, { virtualConsole });
+    const { document } = dom.window;
 
-  // Try each selector until we find content
-  for (const selector of selectors) {
-    textElements = Array.from(document.querySelectorAll(selector));
-    if (textElements.length > 0) break;
-  }
+    // Primary content selectors in order of preference
+    const contentSelectors = [
+      'article',
+      'main',
+      '[role="main"]',
+      '.post-content',
+      '.article-content',
+      '.content',
+      '.entry-content',
+    ];
 
-  // If we still don't have content, try getting all text nodes
-  if (!textElements.length) {
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    // Text-containing elements to extract from
+    const textSelectors = ['p', 'h1, h2, h3, h4, h5, h6', 'li', 'blockquote'];
 
-    textElements = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.textContent?.trim()) {
-        textElements.push(node.parentElement || document.createElement('div'));
+    let content: Element[] = [];
+
+    // Try to find main content container first
+    for (const selector of contentSelectors) {
+      const elements = Array.from(document.querySelectorAll(selector));
+      if (elements.length > 0) {
+        content = elements;
+        break;
       }
     }
-  }
 
-  // Extract and clean text content
-  const textContents = textElements
-    .map((el) => el.textContent?.trim())
-    .filter(Boolean)
-    .map((text) => (text ? cleanText(text) : ''));
+    // If no main content found, fall back to body
+    if (!content.length) {
+      content = [document.body];
+    }
 
-  // Combine all text
-  const text = textContents.join(' ').trim();
+    // Extract text from content areas
+    const textElements = content.flatMap((container) =>
+      Array.from(container.querySelectorAll(textSelectors.join(',')))
+    );
 
-  // Return empty array if no meaningful content found
-  if (!text) {
-    console.warn(`No text content found for ${url}`);
-    return { url, chunks: [] };
-  }
+    // Filter and clean text content
+    const rawContent = textElements
+      .map((el) => el.textContent?.trim())
+      .filter((text): text is string => {
+        if (!text) return false;
+        // Filter out short or low-information content
+        if (text.length < 20) return false;
+        // Filter out navigation/menu text
+        if (
+          text.toLowerCase().includes('menu') ||
+          text.toLowerCase().includes('navigation')
+        )
+          return false;
+        // Filter out common UI text
+        if (/^(share|search|subscribe|follow|sign up|login)$/i.test(text))
+          return false;
+        return true;
+      })
+      .map(cleanText)
+      .join(' ')
+      .trim();
 
-  // Create semantic chunks with overlap
-  const chunks = chunkText(text, {
-    chunkSize: 3000, // Much larger chunks to capture more context
-    overlap: 500, // Larger overlap to maintain coherence
-    minLength: 100, // Increased min length for more meaningful chunks
-    maxChunks: 100, // Fewer but larger chunks
-  });
+    if (!rawContent) {
+      console.warn(`No text content found for ${url}`);
+      return { url, content: '' };
+    }
 
-  try {
+    // Process with GPT-4-mini to extract main content
+    const { text: processedContent } = await generateText({
+      model: openai('gpt-4o-mini'),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Extract the main information from the text, removing unnecessary details, advertisements, and boilerplate content. Maintain the core message and important details while making the text more concise. Return only the processed content without any additional commentary.',
+        },
+        {
+          role: 'user',
+          content: rawContent,
+        },
+      ],
+    });
+
+    // Extract metadata
     const { hostname } = new URL(url);
-    const title = document.title;
-    return { url, chunks, hostname, title };
-  } catch (e) {
-    return { url, chunks };
+    const title = document.title?.trim();
+
+    return { url, content: processedContent.trim(), hostname, title };
+  } catch (error) {
+    console.error(`Error parsing ${url}:`, error);
+    return { url, content: '' };
   }
 }

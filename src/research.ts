@@ -86,7 +86,7 @@ async function research(topic: string): Promise<BlogPost> {
         process.stdout.write(kleur.dim(`  ${url.slice(0, 60)}... `));
         try {
           const result = await parseWeb(url);
-          if (result.chunks.length > 0) {
+          if (result.content) {
             process.stdout.write(kleur.green('✓\n'));
             successCount++;
           } else {
@@ -97,7 +97,7 @@ async function research(topic: string): Promise<BlogPost> {
         } catch (error) {
           process.stdout.write(kleur.red('failed\n'));
           failCount++;
-          return { url, chunks: [] };
+          return { url, content: '' };
         }
       })
     );
@@ -114,7 +114,7 @@ async function research(topic: string): Promise<BlogPost> {
 
   // Combine all content
   const allContent = contents.map((content) => ({
-    text: content.chunks.join('\n\n'),
+    text: content.content,
     source: {
       url: content.url,
       title: content.title || 'Untitled',
